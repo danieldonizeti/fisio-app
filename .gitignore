@@ -1,0 +1,136 @@
+# Logs e arquivos temporários
+*.log
+logs/*.log
+*.pot
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Configurações locais e credenciais
+local_settings.py
+.env
+secrets.json
+*.pem
+*.key
+
+# Banco de dados local
+db.sqlite3
+db.sqlite3-journal
+
+# Uploads de usuários
+media/
+
+# Arquivos estáticos coletados pelo Django
+staticfiles/
+
+# Distribuição / pacotes
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Ambientes virtuais
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Testes e cobertura
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Documentação
+docs/_build/
+site/
+
+# IDEs e configs locais
+.spyderproject
+.spyproject
+.ropeproject
+.idea/
+.vscode/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# PyCharm / JetBrains
+# (descomente se quiser ignorar toda a pasta do projeto)
+#.idea/
+
+# Ferramentas de tipagem e lint
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# Docker
+*.pid
+*.sock
+.docker/
+
+# Outros caches
+cython_debug/
+
+#REAC NATIVE
+# Pasta de dependências
+node_modules/
+.expo/
+dist/
+build/
+*.local
+
+# Logs e arquivos de debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Arquivos de configuração do sistema operacional
+.DS_Store
+Thumbs.db
+
+# Pastas de build nativas (geradas pelo Expo prebuild)
+android/
+ios/
+
+# Arquivos de ambiente
+.env
+.env*.local
+
+# Cache do Metro Bundler
+.metro-cache/
+
+# Configurações de IDE
+.vscode/
+.idea/
+*.sublime-*
