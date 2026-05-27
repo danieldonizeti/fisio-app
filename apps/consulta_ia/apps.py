@@ -2,4 +2,4 @@ from django.apps import AppConfig
 
 
 class ConsultaIaConfig(AppConfig):
-    name = 'consulta_ia'
+    name = 'apps.consulta_ia'
