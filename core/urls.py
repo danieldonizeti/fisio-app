@@ -23,6 +23,7 @@ urlpatterns = [
     path('api/auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     #apps
+    path('api/anatomia/', include('apps.anatomia.urls')),
     path('api/patologias/', include('apps.patologias.urls')),
     path('api/teste/', include('apps.testes.urls')),
     path('api/exercicios/', include('apps.exercicios.urls')),

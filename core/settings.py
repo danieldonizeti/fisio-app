@@ -30,7 +30,8 @@ INSTALLED_APPS = [
     'apps.exercicios',
     'apps.pacientes',
     'apps.consulta_ia',
-]
+    'apps.anatomia',
+    ]
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
@@ -120,7 +121,6 @@ CORS_ALLOW_ALL_ORIGINS = True # Em desenvolvimento
 
 
 #Anthropic
-print(">>> ANTHROPIC_API_KEY:", os.getenv('ANTHROPIC_API_KEY'))
 ANTROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
 
 AUTH_USER_MODEL = 'users.User'
