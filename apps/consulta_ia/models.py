@@ -31,7 +31,7 @@ class SimulacaoConsulta(models.Model):
         ordering = ['-criado_em']
     
     def __str__(self):
-        return f'Simulação {self.nivel} — {self.fisioterapeuta.username} ({self.criado_em.strftime("%d/%m/%Y")})'
+        return f'Simulação {self.nivel} — {self.fisioterapeuta.email} ({self.criado_em.strftime("%d/%m/%Y")})'
     
 
 class MensagemSimulacao(models.Model):
