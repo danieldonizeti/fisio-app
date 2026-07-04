@@ -22,6 +22,7 @@ class Teste(models.Model):
     achado_negativo = models.TextField(blank=True, help_text='O que indica quando negativo')
     sensibilidade = models.CharField(max_length=20, blank=True, help_text='Ex: 72%')
     especificidade = models.CharField(max_length=20, blank=True, help_text='Ex: 66%')
+
     criado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:
