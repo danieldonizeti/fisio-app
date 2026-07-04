@@ -29,7 +29,7 @@ export function AuthProvider({ children }) {
 
   async function login(email, senha) {
     const response = await api.post('/api/auth/login/', {
-      email,
+      email: email.trim(),
       password: senha,
     });
 

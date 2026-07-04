@@ -11,16 +11,22 @@ import {
 } from 'react-native';
 import api from '../../services/api';
 
-const ESTRUTURAS = [
+const REGIOES = [
   { label: 'Todas', value: '' },
+  { label: 'Cabeca e Pescoco', value: 'cabeca_pescoco' },
   { label: 'Ombro', value: 'ombro' },
-  { label: 'Joelho', value: 'joelho' },
-  { label: 'Quadril', value: 'quadril' },
-  { label: 'Coluna', value: 'coluna' },
+  { label: 'Braco', value: 'braco' },
   { label: 'Cotovelo', value: 'cotovelo' },
-  { label: 'Punho', value: 'punho' },
-  { label: 'Tornozelo', value: 'tornozelo' },
-  { label: 'Outros', value: 'outros' },
+  { label: 'Antebraco', value: 'antebraco' },
+  { label: 'Punho e Mao', value: 'punho_mao' },
+  { label: 'Coluna Cervical', value: 'coluna_cervical' },
+  { label: 'Coluna Toracica', value: 'coluna_toracica' },
+  { label: 'Coluna Lombar', value: 'coluna_lombar' },
+  { label: 'Quadril', value: 'quadril' },
+  { label: 'Coxa', value: 'coxa' },
+  { label: 'Joelho', value: 'joelho' },
+  { label: 'Perna', value: 'perna' },
+  { label: 'Tornozelo e Pe', value: 'tornozelo_pe' },
 ];
 
 function extrairLista(data) {
@@ -29,60 +35,62 @@ function extrairLista(data) {
   return [];
 }
 
-export default function TestesScreen({ navigation }) {
-  const [testes, setTestes] = useState([]);
+export default function AnatomiaListaScreen({ route, navigation }) {
+  const { titulo, endpoint } = route.params;
+  const [itens, setItens] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [busca, setBusca] = useState('');
-  const [estruturaFiltro, setEstruturaFiltro] = useState('');
+  const [regiaoFiltro, setRegiaoFiltro] = useState('');
 
   useEffect(() => {
-    buscarTestes();
-  }, [busca, estruturaFiltro]);
+    navigation.setOptions({ title: titulo });
+    buscarItens();
+  }, [busca, regiaoFiltro]);
 
-  async function buscarTestes() {
+  async function buscarItens() {
     try {
       setCarregando(true);
       const params = {};
       if (busca) params.search = busca;
 
-      const response = await api.get('/api/teste/', { params });
+      const response = await api.get(`/api/anatomia/${endpoint}/`, { params });
       const lista = extrairLista(response.data);
-      const dados = estruturaFiltro
-        ? lista.filter((item) => item.estrutura === estruturaFiltro)
+      const dados = regiaoFiltro
+        ? lista.filter((item) => item.regiao === regiaoFiltro)
         : lista;
 
-      setTestes(dados);
+      setItens(dados);
     } catch (error) {
-      Alert.alert('Erro', 'Não foi possível carregar os testes.');
+      Alert.alert('Erro', `Não foi possível carregar ${titulo.toLowerCase()}.`);
     } finally {
       setCarregando(false);
     }
   }
 
-  function renderTeste({ item }) {
+  function renderItem({ item }) {
     return (
       <TouchableOpacity
         style={styles.card}
-        onPress={() => navigation.navigate('TesteDetalhe', {
+        onPress={() => navigation.navigate('AnatomiaDetalhe', {
           id: item.id,
           nome: item.nome,
-          teste: item,
+          endpoint,
+          item,
         })}
         activeOpacity={0.7}
       >
         <View style={styles.cardLeft}>
-          <View style={styles.estruturaTag}>
-            <Text style={styles.estruturaTexto}>{item.estrutura_display}</Text>
+          <View style={styles.regiaoTag}>
+            <Text style={styles.regiaoTexto}>{item.regiao_display}</Text>
           </View>
           <Text style={styles.cardNome}>{item.nome}</Text>
-          <Text style={styles.cardDescricao} numberOfLines={2}>
-            {item.descricao}
-          </Text>
-          {item.sensibilidade ? (
-            <View style={styles.statsRow}>
-              <Text style={styles.statTexto}>Sens: {item.sensibilidade}%</Text>
-              <Text style={styles.statTexto}>Esp: {item.especificidade}%</Text>
-            </View>
+          {item.nome_cientifico ? (
+            <Text style={styles.cardCientifico}>{item.nome_cientifico}</Text>
+          ) : null}
+          {item.descricao ? (
+            <Text style={styles.cardDescricao} numberOfLines={2}>
+              {item.descricao}
+            </Text>
           ) : null}
         </View>
         <Text style={styles.seta}>›</Text>
@@ -95,7 +103,7 @@ export default function TestesScreen({ navigation }) {
       <View style={styles.buscaContainer}>
         <TextInput
           style={styles.buscaInput}
-          placeholder="🔍 Buscar teste..."
+          placeholder={`🔍 Buscar ${titulo.toLowerCase()}...`}
           placeholderTextColor="#9CA3AF"
           value={busca}
           onChangeText={setBusca}
@@ -104,7 +112,7 @@ export default function TestesScreen({ navigation }) {
 
       <FlatList
         horizontal
-        data={ESTRUTURAS}
+        data={REGIOES}
         keyExtractor={(item) => item.value}
         showsHorizontalScrollIndicator={false}
         style={styles.filtrosLista}
@@ -113,13 +121,13 @@ export default function TestesScreen({ navigation }) {
           <TouchableOpacity
             style={[
               styles.filtroPill,
-              estruturaFiltro === item.value && styles.filtroPillAtivo,
+              regiaoFiltro === item.value && styles.filtroPillAtivo,
             ]}
-            onPress={() => setEstruturaFiltro(item.value)}
+            onPress={() => setRegiaoFiltro(item.value)}
           >
             <Text style={[
               styles.filtroTexto,
-              estruturaFiltro === item.value && styles.filtroTextoAtivo,
+              regiaoFiltro === item.value && styles.filtroTextoAtivo,
             ]}>
               {item.label}
             </Text>
@@ -129,20 +137,20 @@ export default function TestesScreen({ navigation }) {
 
       {carregando ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#16A34A" />
-          <Text style={styles.loadingTexto}>Carregando testes...</Text>
+          <ActivityIndicator size="large" color="#9333EA" />
+          <Text style={styles.loadingTexto}>Carregando {titulo.toLowerCase()}...</Text>
         </View>
       ) : (
         <FlatList
           style={{ flex: 1 }}
-          data={testes}
+          data={itens}
           keyExtractor={(item) => String(item.id)}
-          renderItem={renderTeste}
+          renderItem={renderItem}
           contentContainerStyle={styles.listaContainer}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.vazioContainer}>
-              <Text style={styles.vazioTexto}>Nenhum teste encontrado.</Text>
+              <Text style={styles.vazioTexto}>Nenhum item encontrado.</Text>
             </View>
           }
         />
@@ -179,7 +187,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  filtroPillAtivo: { backgroundColor: '#16A34A', borderColor: '#16A34A' },
+  filtroPillAtivo: { backgroundColor: '#9333EA', borderColor: '#9333EA' },
   filtroTexto: { fontSize: 13, color: '#6B7280', fontWeight: '500' },
   filtroTextoAtivo: { color: '#FFFFFF' },
   listaContainer: { padding: 16, gap: 10 },
@@ -199,19 +207,18 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   cardLeft: { flex: 1 },
-  estruturaTag: {
-    backgroundColor: '#F0FDF4',
+  regiaoTag: {
+    backgroundColor: '#FDF4FF',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
     alignSelf: 'flex-start',
     marginBottom: 6,
   },
-  estruturaTexto: { fontSize: 11, color: '#16A34A', fontWeight: '600' },
-  cardNome: { fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 4 },
+  regiaoTexto: { fontSize: 11, color: '#9333EA', fontWeight: '600' },
+  cardNome: { fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 2 },
+  cardCientifico: { fontSize: 13, color: '#9CA3AF', fontStyle: 'italic', marginBottom: 4 },
   cardDescricao: { fontSize: 13, color: '#6B7280', lineHeight: 18 },
-  statsRow: { flexDirection: 'row', gap: 12, marginTop: 6 },
-  statTexto: { fontSize: 12, color: '#9CA3AF', fontWeight: '500' },
   seta: { fontSize: 22, color: '#D1D5DB', marginLeft: 8 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   loadingTexto: { color: '#6B7280', fontSize: 14 },

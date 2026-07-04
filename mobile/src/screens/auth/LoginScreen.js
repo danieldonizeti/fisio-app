@@ -21,7 +21,7 @@ export default function LoginScreen({ navigation }) {
   const [carregando, setCarregando] = useState(false);
 
   async function handleLogin() {
-    if (!email || !senha) {
+    if (!email.trim() || !senha) {
       Alert.alert('Atenção', 'Preencha o email e a senha.');
       return;
     }
@@ -32,7 +32,20 @@ export default function LoginScreen({ navigation }) {
       // Não precisa navegar — o AuthContext já atualiza o estado
       // e o Routes.js redireciona automaticamente para o app
     } catch (error) {
-      Alert.alert('Erro', 'Email ou senha incorretos.');
+      if (!error.response) {
+        Alert.alert(
+          'Erro de conexao',
+          'Nao foi possivel conectar ao servidor. Verifique se a API esta rodando e se o celular esta na mesma rede.'
+        );
+        return;
+      }
+
+      if (error.response.status === 401) {
+        Alert.alert('Erro', 'Email ou senha incorretos.');
+        return;
+      }
+
+      Alert.alert('Erro', 'Nao foi possivel fazer login. Tente novamente.');
     } finally {
       setCarregando(false);
     }
