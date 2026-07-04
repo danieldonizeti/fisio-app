@@ -15,7 +15,7 @@ class SessaoSerializer(serializers.ModelSerializer):
     class Meta:
         model = SessaoFisioterapia
         fields = '__all__'
-        read_only_fields = ['fisioterapeuta']
+        read_only_fields = ['fisioterapeuta', 'paciente', 'numero_sessao']
 
 
 class PacienteSerializer(serializers.ModelSerializer):
