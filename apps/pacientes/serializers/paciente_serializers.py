@@ -39,7 +39,7 @@ class PacienteSerializer(serializers.ModelSerializer):
 
 
 class PacienteListSerializer(serializers.ModelSerializer):
-    """Simplificado para listagem sem sessões completas"""
+    """simples para listas sem sessões completas"""
     idade = serializers.IntegerField(read_only=True)
     total_sessoes = serializers.SerializerMethodField()
 

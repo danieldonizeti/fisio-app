@@ -28,7 +28,7 @@ export default function NovoPacienteScreen({ navigation }) {
   }
 
   function formatarData(texto) {
-    // Formata automaticamente DD/MM/AAAA enquanto digita
+  
     const numeros = texto.replace(/\D/g, '');
     if (numeros.length <= 2) return numeros;
     if (numeros.length <= 4) return `${numeros.slice(0, 2)}/${numeros.slice(2)}`;
@@ -36,7 +36,7 @@ export default function NovoPacienteScreen({ navigation }) {
   }
 
   function converterData(dataBR) {
-    // Converte DD/MM/AAAA para AAAA-MM-DD (formato Django)
+    
     const partes = dataBR.split('/');
     if (partes.length !== 3) return null;
     return `${partes[2]}-${partes[1]}-${partes[0]}`;

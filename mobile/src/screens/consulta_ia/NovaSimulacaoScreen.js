@@ -47,11 +47,11 @@ export default function NovaSimulacaoScreen({ navigation }) {
     try {
       setCarregando(true);
 
-      // Busca uma patologia aleatória do banco
+      // patologia aleatória do banco
       const patologiaResponse = await api.get('/api/consulta-ia/patologia-aleatoria/');
       const patologia = patologiaResponse.data;
 
-      // Cria a simulação com a patologia sorteada
+      // simulação com a patologia sorteada
       const response = await api.post('/api/consulta-ia/', {
         titulo: titulo || `Simulação ${NIVEIS.find(n => n.value === nivel)?.label}`,
         nivel,

@@ -29,8 +29,8 @@ export default function LoginScreen({ navigation }) {
     try {
       setCarregando(true);
       await login(email, senha);
-      // Não precisa navegar — o AuthContext já atualiza o estado
-      // e o Routes.js redireciona automaticamente para o app
+      // AuthContext atualiza o estado
+      // Routes redireciona automaticamente para o app
     } catch (error) {
       if (!error.response) {
         Alert.alert(

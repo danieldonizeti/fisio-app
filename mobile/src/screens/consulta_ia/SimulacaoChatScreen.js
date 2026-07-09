@@ -112,7 +112,7 @@ async function handleSubmeterDiagnostico() {
     setDiagnostico('');
     setSimulacao((prev) => ({ ...prev, ativa: false }));
 
-    // Mostra o feedback da IA em um modal dedicado
+    // feedback da IA
     setFeedbackIA({
       patologia_real: response.data.patologia_real,
       diagnostico_submetido: response.data.diagnostico_submetido,
@@ -199,7 +199,7 @@ async function handleSubmeterDiagnostico() {
         </View>
       )}
 
-      {/* Botão diagnosticar */}
+      {/*diagnosticar */}
         {simulacao?.ativa && mensagens.length >= 4 && (
     <TouchableOpacity
         style={styles.diagnosticarBtn}

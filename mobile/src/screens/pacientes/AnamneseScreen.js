@@ -76,7 +76,7 @@ export default function AnamneseScreen({ route, navigation }) {
         observacoes: dados.observacoes || '',
       });
     } catch {
-      // Anamnese ainda não existe — formulário vazio
+  
     } finally {
       setCarregando(false);
     }

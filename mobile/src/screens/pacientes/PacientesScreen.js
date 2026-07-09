@@ -17,8 +17,7 @@ export default function PacientesScreen({ navigation }) {
   const [carregando, setCarregando] = useState(true);
   const [busca, setBusca] = useState('');
 
-  // useFocusEffect recarrega a lista sempre que a tela recebe foco
-  // útil para atualizar após cadastrar um novo paciente
+
   useFocusEffect(
     useCallback(() => {
       buscarPacientes();
