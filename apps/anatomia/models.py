@@ -35,7 +35,7 @@ class EstruturaAnatomica(models.Model):
     
 
 class Musculo(EstruturaAnatomica):
-    foto = models.ImageField(upload_to='anatomia/musculos/', blank=True, null=True)
+    foto = models.ImageField(upload_to='fisioapp/anatomia/musculos/', blank=True, null=True)
     origem = models.TextField(help_text='Origem do músculo')
     insercao = models.TextField(help_text='Onde o músculo termina')
     funcao = models.TextField(help_text='Qual movimento ele realiza')
@@ -48,7 +48,7 @@ class Musculo(EstruturaAnatomica):
 
 
 class Tendao(EstruturaAnatomica):
-    foto = models.ImageField(upload_to='anatomia/tendoes/', blank=True, null=True)
+    foto = models.ImageField(upload_to='fisioapp/anatomia/tendoes/', blank=True, null=True)
     musculo_associado = models.CharField(max_length=200, blank=True, help_text='Músculo que ele conecta')
     osso_associado = models.CharField(max_length=200, blank=True, help_text='Osso onde se insere')
     funcao = models.TextField(blank=True)
@@ -60,7 +60,7 @@ class Tendao(EstruturaAnatomica):
 
 
 class Ligamento(EstruturaAnatomica):
-    foto = models.ImageField(upload_to='anatomia/ligamentos/', blank=True, null=True)
+    foto = models.ImageField(upload_to='fisioapp/anatomia/ligamentos/', blank=True, null=True)
     articulacao = models.CharField(max_length=200, blank=True, help_text='Articulação que estabiliza')
     funcao = models.TextField(blank=True, help_text='Como estabiliza a articulação')
     lesao_comum = models.CharField(max_length=200, blank=True, help_text='Ex: entorse, ruptura')
@@ -72,7 +72,7 @@ class Ligamento(EstruturaAnatomica):
 
 
 class Osso(EstruturaAnatomica):
-    foto = models.ImageField(upload_to='anatomia/ossos/', blank=True, null=True)
+    foto = models.ImageField(upload_to='fisioapp/anatomia/ossos/', blank=True, null=True)
     tipo = models.CharField(
         max_length=20,
         choices=[
@@ -94,7 +94,7 @@ class Osso(EstruturaAnatomica):
 
 
 class Articulacao(EstruturaAnatomica):
-    foto = models.ImageField(upload_to='anatomia/articulacoes/', blank=True, null=True)
+    foto = models.ImageField(upload_to='fisioapp/anatomia/articulacoes/', blank=True, null=True)
     tipo = models.CharField(
         max_length=20,
         choices=[

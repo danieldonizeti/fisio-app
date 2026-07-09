@@ -19,7 +19,7 @@ class Exercicio(models.Model):
     nome = models.CharField(max_length=200)
     descricao = models.TextField()
     como_realizar = models.TextField()
-    foto = models.ImageField(upload_to='exercicios/', blank=True, null=True)
+    foto = models.ImageField(upload_to='fisioapp/exercicios/', blank=True, null=True)
     nivel = models.CharField(max_length=20, choices=NIVEL_CHOICES)
     categoria = models.CharField(max_length=20, choices=CATEGORIA_CHOICES)
     series = models.PositiveIntegerField(default=3)

@@ -1,3 +1,4 @@
+import FotoCard from '../../components/FotoCard';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -23,6 +24,7 @@ export default function PatologiaDetalheScreen({ route, navigation }) {
   async function buscarPatologia() {
     try {
       const response = await api.get(`/api/patologias/${id}/`);
+      console.log('FOTO URL:', response.data.foto);
       setPatologia(response.data);
     } catch (error) {
       if (!patologiaInicial) {
@@ -46,15 +48,22 @@ export default function PatologiaDetalheScreen({ route, navigation }) {
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
 
-      {/* Header da patologia — sem repetir o título */}
       <View style={styles.header}>
-        <View style={styles.regiaoTag}>
-          <Text style={styles.regiaoTexto}>{patologia.regiao_display}</Text>
+        <FotoCard
+          foto={patologia.foto}
+          altura={220}
+          placeholder="🦴"
+          cor="#EFF6FF"
+        />
+        <View style={styles.headerInfo}>
+          <View style={styles.regiaoTag}>
+            <Text style={styles.regiaoTexto}>{patologia.regiao_display}</Text>
+          </View>
+          {patologia.descricao ? (
+            <Text style={styles.headerDescricao}>{patologia.descricao}</Text>
+          ) : null}
         </View>
-        {patologia.descricao ? (
-          <Text style={styles.headerDescricao}>{patologia.descricao}</Text>
-        ) : null}
-      </View>
+</View>
 
       {/* Causas */}
       {patologia.causas ? (
@@ -176,6 +185,10 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginBottom: 10,
   },
+  headerInfo: {
+  paddingHorizontal: 20,
+  paddingVertical: 16,
+},
   regiaoTexto: {
     fontSize: 12,
     color: '#2563EB',

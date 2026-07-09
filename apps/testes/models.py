@@ -17,7 +17,7 @@ class Teste(models.Model):
     estrutura = models.CharField(max_length=50, choices=ESTRUTURA_CHOICES)
     descricao = models.TextField()
     como_realizar = models.TextField()
-    foto = models.ImageField(upload_to='testes/', blank=True, null=True)
+    foto = models.ImageField(upload_to='fisioapp/testes/', blank=True, null=True)
     achado_positivo = models.TextField(help_text='O que indica quando positivo')
     achado_negativo = models.TextField(blank=True, help_text='O que indica quando negativo')
     sensibilidade = models.CharField(max_length=20, blank=True, help_text='Ex: 72%')

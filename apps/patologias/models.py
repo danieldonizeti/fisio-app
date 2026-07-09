@@ -16,7 +16,7 @@ class Patologia(models.Model):
     nome = models.CharField(max_length=200)
     regiao = models.CharField(max_length=20, choices=REGIAO_CHOICES)
     descricao = models.TextField()
-    foto = models.ImageField(upload_to='patologias/', blank=True, null=True)
+    foto = models.ImageField(upload_to='fisioapp/patologias/', blank=True, null=True)
     causas = models.TextField(blank=True)
     tratamento = models.TextField(blank=True)
 

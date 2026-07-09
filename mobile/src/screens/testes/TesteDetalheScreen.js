@@ -1,3 +1,4 @@
+import FotoCard from '../../components/FotoCard';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -51,27 +52,33 @@ export default function TesteDetalheScreen({ route, navigation }) {
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
 
-      {/* Header */}
       <View style={styles.header}>
-        <View style={styles.estruturaTag}>
-          <Text style={styles.estruturaTexto}>{teste.estrutura_display}</Text>
+  <FotoCard
+    foto={teste.foto}
+    altura={220}
+    placeholder="🔬"
+    cor="#F0FDF4"
+  />
+  <View style={styles.headerInfo}>
+    <View style={styles.estruturaTag}>
+      <Text style={styles.estruturaTexto}>{teste.estrutura_display}</Text>
+    </View>
+    <Text style={styles.titulo}>{teste.nome}</Text>
+    {teste.sensibilidade ? (
+      <View style={styles.statsContainer}>
+        <View style={styles.statCard}>
+          <Text style={styles.statValor}>{teste.sensibilidade}%</Text>
+          <Text style={styles.statLabel}>Sensibilidade</Text>
         </View>
-
-        {/* Sensibilidade e Especificidade */}
-        {teste.sensibilidade ? (
-          <View style={styles.statsContainer}>
-            <View style={styles.statCard}>
-              <Text style={styles.statValor}>{teste.sensibilidade}%</Text>
-              <Text style={styles.statLabel}>Sensibilidade</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statCard}>
-              <Text style={styles.statValor}>{teste.especificidade}%</Text>
-              <Text style={styles.statLabel}>Especificidade</Text>
-            </View>
-          </View>
-        ) : null}
+        <View style={styles.statDivider} />
+        <View style={styles.statCard}>
+          <Text style={styles.statValor}>{teste.especificidade}%</Text>
+          <Text style={styles.statLabel}>Especificidade</Text>
+        </View>
       </View>
+    ) : null}
+  </View>
+</View>
 
       {/* Descrição */}
       <View style={styles.secao}>
@@ -155,6 +162,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
   },
+  headerInfo: {
+  paddingHorizontal: 20,
+  paddingVertical: 16,
+},
   estruturaTag: {
     backgroundColor: '#F0FDF4',
     paddingHorizontal: 10,
