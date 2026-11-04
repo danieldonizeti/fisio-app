@@ -152,8 +152,16 @@ def test_simulacao_finalizada_rejeita_mensagem(api_client, usuario, simulacao):
     assert response.status_code == 400
 
 
+@pytest.mark.xfail(strict=True, reason="Sem limite agora")
+@pytest.mark.django_db
+def test_mensagem_muito_longa_retorna_400(api_client, usuario, simulacao):
+    api_client.force_authenticate(user=usuario)
+    response = api_client.post(url_acao("enviar-mensagem", simulacao.pk), {"mensagem": "a" * 5000})
+    assert response.status_code == 400
+
+
 # 5. Proteção da patologia
-@pytest.mark.xfail(strict=True, reason="patologia_simulada é gravável; corrigir no PR 7")
+@pytest.mark.xfail(strict=True, reason="patologia_simulada é gravável; irei corrigir depois")
 @pytest.mark.django_db
 def test_patch_nao_altera_patologia(api_client, usuario, simulacao):
     api_client.force_authenticate(user=usuario)
