@@ -149,4 +149,8 @@ CORS_ALLOW_ALL_ORIGINS = True # Em desenvolvimento
 # Gemini
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "")
+OPENAI_TIMEOUT_SECONDS = float(os.environ.get("OPENAI_TIMEOUT_SECONDS", "30"))
+
 AUTH_USER_MODEL = 'users.User'

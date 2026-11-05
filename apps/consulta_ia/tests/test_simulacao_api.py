@@ -1,61 +1,14 @@
 import pytest
 
-from types import SimpleNamespace
-from unittest.mock import patch
-
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 
-from rest_framework.test import APIClient
+from apps.consulta_ia.models import SimulacaoConsulta, MensagemSimulacao
+from apps.consulta_ia.domain.exceptions import AIProviderError
 
-from apps.consulta_ia.models import SimulacaoConsulta
-
-
-User = get_user_model()
 
 def url_acao(nome, pk):
     return reverse(f"simulacao-{nome}", kwargs={"pk": pk})
-
-
-@pytest.fixture
-def usuario():
-    return User.objects.create_user(
-        email="ana@example.com",
-        password="senha-teste"
-    )
-
-
-@pytest.fixture
-def outro_usuario():
-    return User.objects.create_user(
-        email="carlos@example.com",
-        password="senha-teste-123"
-    )
-
-
-@pytest.fixture
-def api_client():
-    return APIClient()
-
-
-@pytest.fixture(autouse=True)
-def llm_falso(monkeypatch):
-    """Toda chamada ao LLM nos testes é simulada"""
-    monkeypatch.setenv("API_KEY", "chave_falsa_de_teste")
-    with patch("apps.consulta_ia.views.views.genai.Client") as client_cls:
-        gerar = client_cls.return_value.models.generate_content
-        gerar.return_value = SimpleNamespace(text="Dói quando levanto o braço, doutor")
-        yield gerar
-
-
-@pytest.fixture
-def simulacao(usuario):
-    return SimulacaoConsulta.objects.create(
-        fisioterapeuta=usuario,
-        titulo="Caso de teste",
-        nivel="facil",
-        patologia_simulada="Tendinite do supraespinhal",
-    )
 
 
 @pytest.mark.django_db
@@ -95,7 +48,7 @@ def test_usuario_lista_somente_suas_simulacoes(
 
     assert response.status_code == 200
     assert len(response.data) == 1
-    #assert response.data["results"][0]["titulo"] == "Minha Simulação"
+    #assert response.data["results"]["titulo"] == "Minha Simulação"
 
 
 @pytest.mark.django_db
@@ -129,7 +82,7 @@ def test_nao_envia_mensagem_na_simulacao_de_outro_usuario(api_client, simulacao,
     response = api_client.post(url_acao("enviar-mensagem", simulacao.pk), {"mensagem": "oi"})
 
     assert response.status_code == 404
-    #assert MensagemSimulacao.objects.count() == 0
+    assert MensagemSimulacao.objects.count() == 0
 
 
 #PAYLOAD
@@ -184,17 +137,41 @@ def test_detalhe_nao_expoe_patologia(api_client, usuario, simulacao):
 
 # 6. Falha da IA
 @pytest.mark.django_db
-def test_falha_da_ia_retorna_500(api_client, usuario, simulacao, llm_falso):
-    llm_falso.side_effect = Exception("segredo-do-sdk")
+def test_falha_da_ia_retorna_500(api_client, usuario, simulacao, ia_falsa):
+    ia_falsa.erro = AIProviderError("segredo-do-sdk")
     api_client.force_authenticate(user=usuario)
     response = api_client.post(url_acao("enviar-mensagem", simulacao.pk), {"mensagem": "oi"})
     assert response.status_code == 500
 
 
-@pytest.mark.xfail(strict=True, reason="str(e) vaza para o cliente")
 @pytest.mark.django_db
-def test_falha_da_ia_nao_vaza_detalhes(api_client, usuario, simulacao, gemini_falso):
-    gemini_falso.side_effect = Exception("segredo-do-sdk")
+def test_falha_da_ia_nao_vaza_detalhes(api_client, usuario, simulacao, ia_falsa):
+    ia_falsa.erro = AIProviderError("segredo-do-sdk")
     api_client.force_authenticate(user=usuario)
     response = api_client.post(url_acao("enviar-mensagem", simulacao.pk), {"mensagem": "oi"})
+    assert response.status_code == 500
+    assert response.data["code"] == "ai_provider_error"
     assert "segredo-do-sdk" not in str(response.data)
+
+
+@pytest.mark.django_db
+def test_enviar_mensagem_retorna_resposta_do_paciente(api_client, usuario, simulacao):
+    api_client.force_authenticate(user=usuario)
+    response = api_client.post(url_acao("enviar-mensagem", simulacao.pk), {"mensagem": "Onde dói?"})
+    assert response.status_code == 200
+    assert response.data == {
+        "remetente": "paciente",
+        "conteudo": "Dói quando levanto o braço, doutor.",
+    }
+    assert [m.remetente for m in simulacao.mensagens.all()] == ["fisio", "paciente"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("valor", [None, 123, ["a"]])
+def test_mensagem_nao_textual_retorna_400(api_client, usuario, simulacao, valor):
+    api_client.force_authenticate(user=usuario)
+    response = api_client.post(
+        url_acao("enviar-mensagem", simulacao.pk), {"mensagem": valor}, format="json"
+    )
+    assert response.status_code == 400
+    assert response.data["code"] == "invalid_message"

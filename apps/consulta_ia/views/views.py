@@ -7,10 +7,30 @@ from google import genai
 from google.genai import types
 import random
 import os
+import logging
+
+from apps.consulta_ia.ai.providers.factory import get_ai_provider
+from apps.consulta_ia.application.use_cases.send_patient_message import SendPatientMessage
+from apps.consulta_ia.domain.exceptions import ConsultaIAError
 
 from ..models import SimulacaoConsulta, MensagemSimulacao
 from ..serializers.consulta_ia_serializer import SimulacaoSerializer, MensagemSerializer
 from ..prompts import get_prompt
+
+
+logger = logging.getLogger(__name__)
+
+_STATUS_POR_CODIGO = {"simulation_closed": 400, "invalid_message": 400}
+
+
+def _resposta_de_erro(exc: ConsultaIAError) -> Response:
+    http_status = _STATUS_POR_CODIGO.get(exc.code, 500)
+    if http_status >= 500:
+        logger.error("Falha em consulta_ia: %s", exc, exc_info=exc)
+    return Response(
+        {"detail": exc.public_message, "code": exc.code}, status=http_status
+    )
+
 
 
 class SimulacaoViewSet(viewsets.ModelViewSet):
@@ -37,81 +57,28 @@ class SimulacaoViewSet(viewsets.ModelViewSet):
             'regiao': patologia.get_regiao_display(),
         })
 
+
     @action(detail=True, methods=['post'], url_path='enviar-mensagem')
     def enviar_mensagem(self, request, pk=None):
         simulacao = self.get_object()
-
-        if not simulacao.ativa:
-            return Response(
-                {'detail': 'Esta simulação já foi finalizada.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        mensagem_fisio = request.data.get('mensagem', '').strip()
-        if not mensagem_fisio:
-            return Response(
-                {'detail': 'Mensagem não pode ser vazia.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        MensagemSimulacao.objects.create(
-            simulacao=simulacao,
-            remetente='fisio',
-            conteudo=mensagem_fisio
-        )
-
-        historico = simulacao.mensagens.all()
-        contents = []
-        for msg in historico:
-            role = 'user' if msg.remetente == 'fisio' else 'model'
-            contents.append({
-                'role': role,
-                'parts': [{'text': msg.conteudo}],
-            })
-
-        api_key = os.environ.get('GEMINI_API_KEY', '')
-        if not api_key:
-            return Response(
-                {'detail': 'Chave da API Gemini não configurada.'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
         try:
-            client = genai.Client(api_key=api_key)
-            response = client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=get_prompt(simulacao.nivel, simulacao.patologia_simulada),
-                    max_output_tokens=300,
-                    temperature=0.8,
-                    thinking_config=types.ThinkingConfig(thinking_budget=0),
-                ),
+            caso_de_uso = SendPatientMessage(
+                provider=get_ai_provider(),
+                build_instructions=get_prompt,
             )
-            resposta_ia = (response.text or '').strip()
-
-            if not resposta_ia:
-                return Response(
-                    {'detail': 'A IA não retornou uma resposta.'},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-
-        except Exception as e:
-            return Response(
-                {'detail': f'Erro ao contatar IA: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-        MensagemSimulacao.objects.create(
-            simulacao=simulacao,
-            remetente='paciente',
-            conteudo=resposta_ia
-        )
+            resposta = caso_de_uso.execute(simulacao, request.data.get('mensagem'))
+        except ConsultaIAError as exc:
+            return _resposta_de_erro(exc)
+        except Exception:
+            logger.exception("Erro inesperado em enviar_mensagem")
+            return _resposta_de_erro(ConsultaIAError())
 
         return Response({
-            'remetente': 'paciente',
-            'conteudo': resposta_ia,
+            'remetente': resposta.remetente,
+            'conteudo': resposta.conteudo,
         })
+
+    
 
     @action(detail=True, methods=['post'], url_path='submeter-diagnostico')
     def submeter_diagnostico(self, request, pk=None):
