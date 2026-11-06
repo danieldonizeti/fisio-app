@@ -153,4 +153,7 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "")
 OPENAI_TIMEOUT_SECONDS = float(os.environ.get("OPENAI_TIMEOUT_SECONDS", "30"))
 
+AI_CONTEXT_MAX_INPUT_TOKENS = int(os.environ.get("AI_CONTEXT_MAX_INPUT_TOKENS", "3000"))
+AI_CONTEXT_MAX_MESSAGES = int(os.environ.get("AI_CONTEXT_MAX_MESSAGES", "30"))
+
 AUTH_USER_MODEL = 'users.User'

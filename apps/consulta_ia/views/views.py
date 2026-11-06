@@ -12,6 +12,7 @@ import logging
 from apps.consulta_ia.ai.providers.factory import get_ai_provider
 from apps.consulta_ia.application.use_cases.send_patient_message import SendPatientMessage
 from apps.consulta_ia.domain.exceptions import ConsultaIAError
+from apps.consulta_ia.ai.context.factory import get_context_builder
 
 from ..models import SimulacaoConsulta, MensagemSimulacao
 from ..serializers.consulta_ia_serializer import SimulacaoSerializer, MensagemSerializer
@@ -65,6 +66,7 @@ class SimulacaoViewSet(viewsets.ModelViewSet):
             caso_de_uso = SendPatientMessage(
                 provider=get_ai_provider(),
                 build_instructions=get_prompt,
+                context_builder=get_context_builder()
             )
             resposta = caso_de_uso.execute(simulacao, request.data.get('mensagem'))
         except ConsultaIAError as exc:
