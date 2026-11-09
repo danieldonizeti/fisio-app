@@ -31,3 +31,9 @@ class SimulationClosedError(ConsultaIAError):
 class InvalidMessageError(ConsultaIAError):
     code = "invalid_message"
     public_message = "Mensagem inválida."
+
+
+class ContextSummaryError(ConsultaIAError):
+    code = "context_summary_error"
+    public_message = "Não foi possivel atualizar o resumo da consulta"
+    

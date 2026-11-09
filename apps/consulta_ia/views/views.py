@@ -9,6 +9,8 @@ import random
 import os
 import logging
 
+from apps.consulta_ia.ai.context.summarizer import ClinicalSummarizer
+
 from apps.consulta_ia.ai.providers.factory import get_ai_provider
 from apps.consulta_ia.application.use_cases.send_patient_message import SendPatientMessage
 from apps.consulta_ia.domain.exceptions import ConsultaIAError
@@ -62,11 +64,13 @@ class SimulacaoViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='enviar-mensagem')
     def enviar_mensagem(self, request, pk=None):
         simulacao = self.get_object()
+        provider = get_ai_provider()
         try:
             caso_de_uso = SendPatientMessage(
-                provider=get_ai_provider(),
+                provider=provider,
                 build_instructions=get_prompt,
-                context_builder=get_context_builder()
+                context_builder=get_context_builder(),
+                summarizer=ClinicalSummarizer(provider),
             )
             resposta = caso_de_uso.execute(simulacao, request.data.get('mensagem'))
         except ConsultaIAError as exc:

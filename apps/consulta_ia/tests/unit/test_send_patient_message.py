@@ -1,4 +1,5 @@
 import pytest
+import json
 
 from apps.consulta_ia.application.use_cases.send_patient_message import SendPatientMessage
 from apps.consulta_ia.domain.exceptions import (
@@ -8,6 +9,83 @@ from apps.consulta_ia.domain.exceptions import (
 )
 from apps.consulta_ia.models import MensagemSimulacao
 from apps.consulta_ia.ai.context.builder import ContextBuilder
+from apps.consulta_ia.ai.context.summarizer import ClinicalSummarizer, SUMMARIZER_INSTRUCTIONS
+from apps.consulta_ia.ai.contracts import AIResponse
+from apps.consulta_ia.domain.exceptions import AIProviderError
+
+RESUMO_JSON = json.dumps({"facts": {"lado_afetado": {"value": "ombro direito"}}})
+
+
+class ProvedorRoteado:
+    """RESPONSE JSON ao resumidor e texto comum ao paciente. """
+    def __init__(self, falhar_no_resumo=False):
+        self.requisicoes = []
+        self.falhar_no_resumo = falhar_no_resumo
+
+
+    def generate(self, request):
+        self.requisicoes.append(request)
+        if request.instructions == SUMMARIZER_INSTRUCTIONS:
+            if self.falhar_no_resumo:
+                raise AIProviderError("falha no resumo")
+            return AIResponse(content=RESUMO_JSON, model="falso")
+        return AIResponse(content="Resposta do paciente", model="falso")
+
+
+def criar_caso(provedor, max_messages=4):
+    return SendPatientMessage(
+        provider=provedor,
+        build_instructions=instrucoes,
+        context_builder=ContextBuilder(max_input_tokens=10_000, max_messages=max_messages),
+        summarizer=ClinicalSummarizer(provedor),
+    )
+
+
+def popular(simulacao, n):
+    for i in range(n):
+        MensagemSimulacao.objects.create(
+            simulacao=simulacao,
+            remetente="fisio" if i % 2 == 0 else "paciente",
+            conteudo=f"mensagem {i}",
+        )
+
+
+@pytest.mark.django_db
+def test_compacta_quando_a_janela_nao_comporta_o_historico(simulacao):
+    popular(simulacao, 10)
+    provedor = ProvedorRoteado()
+
+    criar_caso(provedor).execute(simulacao, "mensagem nova")
+
+    simulacao.refresh_from_db()
+    assert simulacao.resumo_clinico["facts"]["lado_afetado"]["value"] == "ombro direito"
+    assert simulacao.resumo_ate_mensagem_id is not None
+    assert len(provedor.requisicoes) == 2  # resumidor + paciente
+    assert "ombro direito" in provedor.requisicoes[-1].instructions
+
+
+@pytest.mark.django_db
+def test_nao_chama_o_resumidor_quando_tudo_cabe(simulacao):
+    popular(simulacao, 2)
+    provedor = ProvedorRoteado()
+
+    criar_caso(provedor).execute(simulacao, "mensagem nova")
+
+    simulacao.refresh_from_db()
+    assert len(provedor.requisicoes) == 1
+    assert simulacao.resumo_ate_mensagem_id is None
+
+
+@pytest.mark.django_db
+def test_falha_no_resumo_nao_derruba_a_resposta(simulacao):
+    popular(simulacao, 10)
+    provedor = ProvedorRoteado(falhar_no_resumo=True)
+
+    resposta = criar_caso(provedor).execute(simulacao, "mensagem nova")
+
+    simulacao.refresh_from_db()
+    assert resposta.conteudo == "Resposta do paciente"
+    assert simulacao.resumo_ate_mensagem_id is None
 
 
 @pytest.fixture

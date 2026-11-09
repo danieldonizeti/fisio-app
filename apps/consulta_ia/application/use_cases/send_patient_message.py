@@ -6,9 +6,13 @@ from apps.consulta_ia.ai.contracts import AIMessage, AIProvider, AIRequest
 from apps.consulta_ia.domain.exceptions import (
     InvalidMessageError,
     SimulationClosedError,
+    ConsultaIAError,
 )
 from apps.consulta_ia.models import MensagemSimulacao, SimulacaoConsulta
 from apps.consulta_ia.ai.context.builder import ContextBuilder
+from apps.consulta_ia.ai.schemas import ClinicalSummary
+from apps.consulta_ia.ai.context.summarizer import ClinicalSummarizer, render_summary
+
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +25,14 @@ class SendPatientMessage:
         provider: AIProvider,
         build_instructions: Callable[[str, str], str],
         context_builder: ContextBuilder,
+        summarizer: ClinicalSummarizer | None = None,
         max_output_tokens: int = 300,
         temperature: float = 0.8,
     ):
         self._provider = provider
         self._build_instructions = build_instructions
         self._context = context_builder
+        self._summarizer = summarizer
         self._max_output_tokens = max_output_tokens
         self._temperature = temperature
 
@@ -49,18 +55,32 @@ class SendPatientMessage:
             AIMessage(_ROLE_POR_REMETENTE[m.remetente], m.conteudo) for m in recentes
         )
 
-        instrucoes = self._build_instructions(
+        instrucoes_base = self._build_instructions(
             simulacao.nivel, simulacao.patologia_simulada
         )
-        contexto = self._context.build(historico, instrucoes)
-        if contexto.dropped_messages:
-            logger.info(
-                "Contexto reduzido: simulacao=%s descartadas=%s tokens_estimados=%s",
-                simulacao.pk, contexto.dropped_messages, contexto.estimated_tokens,
+        resumo = ClinicalSummary.model_validate(simulacao.resumo_clinico or {})
+
+        # Mensagens posteriores ao último resumo (com folga para haver o que resumir).
+        limite = simulacao.resumo_ate_mensagem_id or 0
+        pendentes = list(
+            simulacao.mensagens.filter(id__gt=limite).order_by("-id")[
+                : self._context.max_messages * 2
+            ]
+        )
+        pendentes.reverse()
+        historico = tuple(
+            AIMessage(_ROLE_POR_REMETENTE[m.remetente], m.conteudo) for m in pendentes
+        )
+
+        contexto = self._context.build(historico, instrucoes_base + render_summary(resumo))
+
+        if contexto.dropped_messages and self._summarizer:
+            resumo, contexto = self._compactar(
+                simulacao, instrucoes_base, resumo, pendentes, historico, contexto
             )
 
         request = AIRequest(
-            instructions=instrucoes,
+            instructions=instrucoes_base + render_summary(resumo),
             messages=contexto.messages,
             max_output_tokens=self._max_output_tokens,
             temperature=self._temperature,
@@ -71,3 +91,19 @@ class SendPatientMessage:
         return MensagemSimulacao.objects.create(
             simulacao=simulacao, remetente="paciente", conteudo=resposta.content
         )
+
+
+    def _compactar(self, simulacao, instrucoes_base, resumo, pendentes, historico, contexto):
+        manter = max(1, len(contexto.messages) // 2)
+        try:
+            novo = self._summarizer.update(resumo, historico[:-manter])
+        except ConsultaIAError as exc:
+            logger.warning("Resumo clínico falhou (simulacao=%s): %s", simulacao.pk, exc)
+            return resumo, contexto  # segue sem resumir; a resposta não quebra
+
+        simulacao.resumo_clinico = novo.model_dump(mode="json")
+        simulacao.resumo_ate_mensagem_id = pendentes[-manter - 1].id
+        simulacao.save(update_fields=["resumo_clinico", "resumo_ate_mensagem_id"])
+
+        contexto = self._context.build(historico, instrucoes_base + render_summary(novo))
+        return novo, contexto

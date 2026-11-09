@@ -25,6 +25,9 @@ class SimulacaoConsulta(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True)
     finalizado_em = models.DateTimeField(null=True, blank=True)
 
+    resumo_clinico = models.JSONField(default=dict, blank=True)
+    resumo_ate_mensagem_id = models.PositiveBigIntegerField(null=True, blank=True)
+
     class Meta:
         verbose_name = 'Simulação de Consulta'
         verbose_name_plural = 'Simulações de Consulta'
