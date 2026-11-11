@@ -9,6 +9,8 @@ from django.contrib.auth import get_user_model
 
 from apps.consulta_ia.ai.contracts import AIResponse
 from apps.consulta_ia.models import SimulacaoConsulta
+from apps.consulta_ia.ai.contracts import AIResponse, AIStructuredResponse
+from apps.consulta_ia.ai.schemas import DiagnosisEvaluation
 
 User = get_user_model()
 
@@ -33,19 +35,14 @@ def api_client():
     return APIClient()
 
 
-@pytest.fixture(autouse=True)
-def gemini_falso(monkeypatch):
-    """Ainda necessário: submeter_diagnostico usa o Gemini até o PR 6."""
-    monkeypatch.setenv("GEMINI_API_KEY", "chave-falsa-de-teste")
-    with patch("apps.consulta_ia.views.views.genai.Client") as client_cls:
-        gerar = client_cls.return_value.models.generate_content
-        gerar.return_value = SimpleNamespace(text="Feedback falso.")
-        yield gerar
-
-
 class IAFalsa:
     def __init__(self):
         self.resposta = "Dói quando levanto o braço, doutor."
+        self.avaliacao = DiagnosisEvaluation(
+            veredito="proximo",
+            analise_clinica="Voce identificou a região, mas faltou precisão.",
+            dica_do_professor="Avalie o arco doloroso e os testes especificos"
+        )
         self.erro = None
         self.requisicoes = []
 
@@ -54,6 +51,13 @@ class IAFalsa:
         if self.erro:
             raise self.erro
         return AIResponse(content=self.resposta, model="falso")
+
+
+    def generate_structured(self, request, schema):
+        self.requisicoes.append(request)
+        if self.erro:
+            raise self.erro
+        return AIStructuredResponse(parsed=self.avaliacao, model="falso")
 
 
 @pytest.fixture(autouse=True)

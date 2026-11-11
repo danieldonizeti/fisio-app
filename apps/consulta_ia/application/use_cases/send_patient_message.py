@@ -12,11 +12,12 @@ from apps.consulta_ia.models import MensagemSimulacao, SimulacaoConsulta
 from apps.consulta_ia.ai.context.builder import ContextBuilder
 from apps.consulta_ia.ai.schemas import ClinicalSummary
 from apps.consulta_ia.ai.context.summarizer import ClinicalSummarizer, render_summary
+from apps.consulta_ia.application.dto import ROLE_POR_REMETENTE
 
 
 logger = logging.getLogger(__name__)
 
-_ROLE_POR_REMETENTE = {"fisio": "user", "paciente": "assistant"}
+_ROLE_POR_REMETENTE = ROLE_POR_REMETENTE
 
 
 class SendPatientMessage:

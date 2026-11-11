@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from pydantic import ValidationError
 
 import pytest
 from openai import OpenAIError
@@ -10,6 +11,13 @@ from apps.consulta_ia.domain.exceptions import (
     AIProviderError,
     AIUnavailableError,
 )
+from apps.consulta_ia.ai.contracts import StructuredAIProvider
+from apps.consulta_ia.ai.schemas import DiagnosisEvaluation
+from apps.consulta_ia.domain.exceptions import AIInvalidOutputError
+
+AVALIACAO = DiagnosisEvaluation(
+    veredito="correto", analise_clinica="Boa análise.", dica_do_professor="Teste o arco doloroso."
+)
 
 
 class ClienteFalso:
@@ -17,7 +25,7 @@ class ClienteFalso:
         self.chamadas = []
         self._resposta = resposta
         self._erro = erro
-        self.responses = SimpleNamespace(create=self._create)
+        self.responses = SimpleNamespace(create=self._create, parse=self._create)
 
     def _create(self, **kwargs):
         self.chamadas.append(kwargs)
@@ -106,3 +114,49 @@ def test_sem_chave_levanta_ai_unavailable():
 def test_sem_modelo_levanta_ai_unavailable():
     with pytest.raises(AIUnavailableError):
         OpenAIProvider(api_key="x", model="")
+
+
+def resposta_estruturada(parsed=AVALIACAO, status="completed"):
+    return SimpleNamespace(
+        output_parsed=parsed, model="modelo-x", status=status,
+        usage=SimpleNamespace(input_tokens=20, output_tokens=30),
+    )
+
+
+def test_satisfaz_o_contrato_estruturado():
+    assert isinstance(provedor(ClienteFalso(resposta_estruturada())), StructuredAIProvider)
+
+
+def test_generate_structured_envia_schema_e_devolve_objeto():
+    cliente = ClienteFalso(resposta_estruturada())
+    out = provedor(cliente).generate_structured(requisicao(), DiagnosisEvaluation)
+    assert cliente.chamadas[0]["text_format"] is DiagnosisEvaluation
+    assert cliente.chamadas[0]["instructions"] == "Você é um paciente."
+    assert out.parsed == AVALIACAO
+    assert (out.input_tokens, out.output_tokens) == (20, 30)
+
+
+def test_generate_structured_sem_objeto_levanta_empty():
+    with pytest.raises(AIEmptyResponseError):
+        provedor(ClienteFalso(resposta_estruturada(None, "incomplete"))).generate_structured(
+            requisicao(), DiagnosisEvaluation
+        )
+
+
+def test_generate_structured_erro_do_sdk_vira_provider_error():
+    with pytest.raises(AIProviderError):
+        provedor(ClienteFalso(erro=OpenAIError("x"))).generate_structured(
+            requisicao(), DiagnosisEvaluation
+        )
+
+
+def test_generate_structured_fora_do_schema_vira_invalid_output():
+    try:
+        DiagnosisEvaluation.model_validate({})
+    except ValidationError as exc:
+        erro_pydantic = exc
+        pass
+    with pytest.raises(AIInvalidOutputError):
+        provedor(ClienteFalso(erro=erro_pydantic)).generate_structured(
+            requisicao(), DiagnosisEvaluation
+        )

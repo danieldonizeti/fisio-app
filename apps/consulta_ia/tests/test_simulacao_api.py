@@ -175,3 +175,50 @@ def test_mensagem_nao_textual_retorna_400(api_client, usuario, simulacao, valor)
     )
     assert response.status_code == 400
     assert response.data["code"] == "invalid_message"
+
+
+@pytest.mark.django_db
+def test_submeter_diagnostico_retorna_avaliacao(api_client, usuario, simulacao):
+    api_client.force_authenticate(user=usuario)
+    response = api_client.post(
+        url_acao("submeter-diagnostico", simulacao.pk), {"diagnostico": "tendinite"}, format="json"
+    )
+    assert response.status_code == 200
+    assert response.data["veredito"] == "proximo"
+    assert response.data["patologia_real"] == "Tendinite do supraespinhal"
+    assert "Análise Clínica" in response.data["feedback"]
+    simulacao.refresh_from_db()
+    assert simulacao.ativa is False
+
+
+@pytest.mark.django_db
+def test_falha_na_avaliacao_nao_da_falso_sucesso(api_client, usuario, simulacao, ia_falsa):
+    ia_falsa.erro = AIProviderError("segredo-do-sdk")
+    api_client.force_authenticate(user=usuario)
+    response = api_client.post(
+        url_acao("submeter-diagnostico", simulacao.pk), {"diagnostico": "tendinite"}, format="json"
+    )
+    assert response.status_code == 500
+    assert "segredo-do-sdk" not in str(response.data)
+    assert "patologia_real" not in response.data
+    simulacao.refresh_from_db()
+    assert simulacao.ativa is True
+
+
+@pytest.mark.django_db
+def test_diagnostico_vazio_retorna_400(api_client, usuario, simulacao):
+    api_client.force_authenticate(user=usuario)
+    response = api_client.post(
+        url_acao("submeter-diagnostico", simulacao.pk), {"diagnostico": "  "}, format="json"
+    )
+    assert response.status_code == 400
+    assert response.data["code"] == "invalid_diagnosis"
+
+
+@pytest.mark.django_db
+def test_nao_submete_diagnostico_na_simulacao_de_outro_usuario(api_client, simulacao, outro_usuario):
+    api_client.force_authenticate(user=outro_usuario)
+    response = api_client.post(
+        url_acao("submeter-diagnostico", simulacao.pk), {"diagnostico": "x"}, format="json"
+    )
+    assert response.status_code == 404

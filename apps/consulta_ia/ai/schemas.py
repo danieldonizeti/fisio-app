@@ -24,4 +24,18 @@ class ClinicalSummary(BaseModel):
             if not _CHAVE.match(chave):
                 raise ValueError(f"Chave inválida: {chave!r}")
         return facts
-        
+
+
+class DiagnosisEvaluation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    veredito: Literal["correto", "proximo", "incorreto"]
+    analise_clinica: str
+    dica_do_professor: str
+
+    @field_validator("analise_clinica", "dica_do_professor")
+    @classmethod
+    def texto_valido(cls, valor: str) -> str:
+        valor = valor.strip()
+        if not valor or len(valor) > 600:
+            raise ValueError("Texto vazio ou longo demais")
+        return valor

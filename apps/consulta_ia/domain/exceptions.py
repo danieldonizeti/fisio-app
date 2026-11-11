@@ -36,4 +36,13 @@ class InvalidMessageError(ConsultaIAError):
 class ContextSummaryError(ConsultaIAError):
     code = "context_summary_error"
     public_message = "Não foi possivel atualizar o resumo da consulta"
-    
+
+
+class InvalidDiagnosisError(ConsultaIAError):
+    code = "invalid_diagnosis"
+    public_message = "Informe o diagnóstico."
+
+
+class AIInvalidOutputError(ConsultaIAError):
+    code = "ai_invalid_output"
+    public_message = "A IA retornou uma resposta em formato inesperado. Tente novamente."

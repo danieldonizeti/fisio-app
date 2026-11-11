@@ -1,7 +1,10 @@
 from dataclasses import dataclass
-from typing import Literal, Protocol, runtime_checkable
+from typing import Literal, Protocol, runtime_checkable, Generic, TypeVar
+from pydantic import BaseModel
 
 role = Literal["user", "assistant"]
+
+T = TypeVar("T", bound=BaseModel)
 
 
 @dataclass(frozen=True)
@@ -39,4 +42,20 @@ class AIResponse:
 @runtime_checkable
 class AIProvider(Protocol):
     def generate(self, request: AIRequest) -> AIResponse:
+        ...
+
+
+@dataclass(frozen=True)
+class AIStructuredResponse(Generic[T]):
+    parsed: T
+    model: str
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+
+
+@runtime_checkable
+class StructuredAIProvider(AIProvider, Protocol):
+    def generate_structured(
+            self, request: AIRequest, schema: type[T]
+    ) -> AIStructuredResponse[T]:
         ...
