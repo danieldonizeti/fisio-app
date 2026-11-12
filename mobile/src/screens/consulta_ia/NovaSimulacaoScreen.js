@@ -46,18 +46,7 @@ export default function NovaSimulacaoScreen({ navigation }) {
   async function handleIniciar() {
     try {
       setCarregando(true);
-
-      // patologia aleatória do banco
-      const patologiaResponse = await api.get('/api/consulta-ia/patologia-aleatoria/');
-      const patologia = patologiaResponse.data;
-
-      // simulação com a patologia sorteada
-      const response = await api.post('/api/consulta-ia/', {
-        titulo: titulo || `Simulação ${NIVEIS.find(n => n.value === nivel)?.label}`,
-        nivel,
-        patologia_simulada: patologia.nome,
-      });
-
+      
       navigation.replace('SimulacaoChat', { id: response.data.id });
     } catch (error) {
       Alert.alert('Erro', 'Não foi possível criar a simulação.');

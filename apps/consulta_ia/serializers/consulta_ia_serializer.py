@@ -17,10 +17,10 @@ class SimulacaoSerializer(serializers.ModelSerializer):
         model = SimulacaoConsulta
         fields = [
             'id', 'titulo', 'nivel', 'nivel_display',
-            'patologia_simulada', 'ativa', 'total_mensagens',
+            'ativa', 'total_mensagens',
             'mensagens', 'criado_em', 'finalizado_em',
         ]
-        read_only_fields = ['fisioterapeuta']
+        read_only_fields = ['ativa', 'finalizado_em', 'criado_em']
 
     def get_total_mensagens(self, obj):
         return obj.mensagens.count()

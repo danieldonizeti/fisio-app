@@ -7,6 +7,7 @@ from apps.consulta_ia.domain.exceptions import (
     InvalidMessageError,
     SimulationClosedError,
     ConsultaIAError,
+    InputTooLongError,
 )
 from apps.consulta_ia.models import MensagemSimulacao, SimulacaoConsulta
 from apps.consulta_ia.ai.context.builder import ContextBuilder
@@ -29,6 +30,7 @@ class SendPatientMessage:
         summarizer: ClinicalSummarizer | None = None,
         max_output_tokens: int = 300,
         temperature: float = 0.8,
+        max_message_chars: int = 1000,
     ):
         self._provider = provider
         self._build_instructions = build_instructions
@@ -36,6 +38,7 @@ class SendPatientMessage:
         self._summarizer = summarizer
         self._max_output_tokens = max_output_tokens
         self._temperature = temperature
+        self._max_message_chars = max_message_chars
 
     def execute(self, simulacao: SimulacaoConsulta, mensagem) -> MensagemSimulacao:
         if not simulacao.ativa:
@@ -44,8 +47,14 @@ class SendPatientMessage:
         if not isinstance(mensagem, str) or not mensagem.strip():
             raise InvalidMessageError("Mensagem ausente, vazia ou não textual.")
 
+        texto = mensagem.strip()
+        if len(texto) > self._max_message_chars:
+            raise InputTooLongError(
+                f"Mensagem com {len(texto)} caracteres (limite {self._max_message_chars})"
+            )
+
         MensagemSimulacao.objects.create(
-            simulacao=simulacao, remetente="fisio", conteudo=mensagem.strip()
+            simulacao=simulacao, remetente="fisio", conteudo=texto
         )
 
         recentes = list(

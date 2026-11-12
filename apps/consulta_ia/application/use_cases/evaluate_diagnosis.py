@@ -9,7 +9,7 @@ from apps.consulta_ia.ai.prompts.diagnosis_evaluator import (
 )
 from apps.consulta_ia.ai.schemas import DiagnosisEvaluation
 from apps.consulta_ia.application.dto import ROLE_POR_REMETENTE
-from apps.consulta_ia.domain.exceptions import InvalidDiagnosisError
+from apps.consulta_ia.domain.exceptions import InvalidDiagnosisError, InputTooLongError, SimulationClosedError
 from apps.consulta_ia.models import SimulacaoConsulta
 
 _ROTULO_VEREDITO = {
@@ -40,15 +40,26 @@ class EvaluateDiagnosis:
         provider: StructuredAIProvider,
         max_output_tokens: int = 1024,
         temperature: float = 0.3,
+        max_diagnosis_chars: int = 300
     ):
         self._provider = provider
         self._max_output_tokens = max_output_tokens
         self._temperature = temperature
+        self._max_diagnosis_chars = max_diagnosis_chars
 
     def execute(self, simulacao: SimulacaoConsulta, diagnostico) -> DiagnosisResult:
+        if not simulacao.ativa:
+            raise SimulationClosedError()
+
         if not isinstance(diagnostico, str) or not diagnostico.strip():
             raise InvalidDiagnosisError("Diagnóstico ausente, vazio ou não textual.")
+        
         diagnostico = diagnostico.strip()
+
+        if len(diagnostico) > self._max_diagnosis_chars:
+            raise InputTooLongError(
+                f"Diagnostico com {len(diagnostico)} caracteres (limite de {self._max_diagnosis_chars})"
+            )
 
         mensagens = tuple(
             AIMessage(ROLE_POR_REMETENTE[m.remetente], m.conteudo)
@@ -63,10 +74,9 @@ class EvaluateDiagnosis:
 
         resposta = self._provider.generate_structured(request, DiagnosisEvaluation)
 
-        if simulacao.ativa:
-            simulacao.ativa = False
-            simulacao.finalizado_em = timezone.now()
-            simulacao.save(update_fields=["ativa", "finalizado_em"])
+        simulacao.ativa = False
+        simulacao.finalizado_em = timezone.now()
+        simulacao.save(update_fields=["ativa", "finalizado_em"])
 
         return DiagnosisResult(
             patologia_real=simulacao.patologia_simulada,

@@ -126,6 +126,9 @@ STATIC_URL = 'static/'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+AI_MAX_USER_MESSAGE_CHARS = int(os.environ.get("AI_MAX_USER_MESSAGE_CHARS", "1000"))
+AI_MAX_DIAGNOSIS_CHARS = int(os.environ.get("AI_MAX_DIAGNOSIS_CHARS", "300"))
+
 # REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -134,6 +137,10 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_THROTTLE_RATES': {
+        'ia_mensagem': '20/min',
+        'ia_diagnostico': '5/min'
+    },
 }
 
 # JWT

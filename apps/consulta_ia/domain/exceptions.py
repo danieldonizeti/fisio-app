@@ -46,3 +46,13 @@ class InvalidDiagnosisError(ConsultaIAError):
 class AIInvalidOutputError(ConsultaIAError):
     code = "ai_invalid_output"
     public_message = "A IA retornou uma resposta em formato inesperado. Tente novamente."
+
+
+class InputTooLongError(ConsultaIAError):
+    code = "input_too_long"
+    public_message = "O texto enviado é longo demais"
+
+
+class NoPathologyAvailableError(ConsultaIAError):
+    code = "no_pathology_available"
+    public_message = "Nenhuma patologia cadastrada no momento."

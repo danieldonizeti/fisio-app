@@ -1,8 +1,10 @@
 import pytest
 
-from django.contrib.auth import get_user_model
 from django.urls import reverse
 
+from rest_framework.throttling import ScopedRateThrottle
+
+from apps.patologias.models import Patologia
 from apps.consulta_ia.models import SimulacaoConsulta, MensagemSimulacao
 from apps.consulta_ia.domain.exceptions import AIProviderError
 
@@ -105,16 +107,7 @@ def test_simulacao_finalizada_rejeita_mensagem(api_client, usuario, simulacao):
     assert response.status_code == 400
 
 
-@pytest.mark.xfail(strict=True, reason="Sem limite agora")
-@pytest.mark.django_db
-def test_mensagem_muito_longa_retorna_400(api_client, usuario, simulacao):
-    api_client.force_authenticate(user=usuario)
-    response = api_client.post(url_acao("enviar-mensagem", simulacao.pk), {"mensagem": "a" * 5000})
-    assert response.status_code == 400
-
-
 # 5. Proteção da patologia
-@pytest.mark.xfail(strict=True, reason="patologia_simulada é gravável; irei corrigir depois")
 @pytest.mark.django_db
 def test_patch_nao_altera_patologia(api_client, usuario, simulacao):
     api_client.force_authenticate(user=usuario)
@@ -127,7 +120,6 @@ def test_patch_nao_altera_patologia(api_client, usuario, simulacao):
     assert simulacao.patologia_simulada == "Tendinite do supraespinhal"
 
 
-@pytest.mark.xfail(strict=True, reason="A API devolve a patologia secreta; corrigir no PR 7")
 @pytest.mark.django_db
 def test_detalhe_nao_expoe_patologia(api_client, usuario, simulacao):
     api_client.force_authenticate(user=usuario)
@@ -222,3 +214,123 @@ def test_nao_submete_diagnostico_na_simulacao_de_outro_usuario(api_client, simul
         url_acao("submeter-diagnostico", simulacao.pk), {"diagnostico": "x"}, format="json"
     )
     assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_mensagem_no_limite_passa_e_acima_do_limite_e_rejeitada(
+    api_client, usuario, simulacao, settings
+):
+    settings.AI_MAX_USER_MESSAGE_CHARS = 50
+    api_client.force_authenticate(user=usuario)
+    url = url_acao("enviar-mensagem", simulacao.pk)
+
+    assert api_client.post(url, {"mensagem": "a" * 50}).status_code == 200
+
+    response = api_client.post(url, {"mensagem": "a" * 51})
+    assert response.status_code == 400
+    assert response.data["code"] == "input_too_long"
+
+
+@pytest.mark.django_db
+def test_diagnostico_muito_longo_retorna_400(api_client, usuario, simulacao, settings, ia_falsa):
+    settings.AI_MAX_DIAGNOSIS_CHARS = 20
+    api_client.force_authenticate(user=usuario)
+    response = api_client.post(
+        url_acao("submeter-diagnostico", simulacao.pk), {"diagnostico": "x" * 21}, format="json"
+    )
+    assert response.status_code == 400
+    assert response.data["code"] == "input_too_long"
+    assert ia_falsa.requisicoes == []
+
+
+@pytest.mark.django_db
+def test_diagnostico_so_pode_ser_submetido_uma_vez(api_client, usuario, simulacao, ia_falsa):
+    api_client.force_authenticate(user=usuario)
+    url = url_acao("submeter-diagnostico", simulacao.pk)
+
+    assert api_client.post(url, {"diagnostico": "tendinite"}, format="json").status_code == 200
+
+    segunda = api_client.post(url, {"diagnostico": "tendinite"}, format="json")
+    assert segunda.status_code == 400
+    assert segunda.data["code"] == "simulation_closed"
+    assert len(ia_falsa.requisicoes) == 1  # a segunda não chamou (nem cobrou) a IA
+
+
+@pytest.mark.django_db
+def test_patch_nao_reabre_simulacao_finalizada(api_client, usuario, simulacao):
+    simulacao.ativa = False
+    simulacao.save()
+    api_client.force_authenticate(user=usuario)
+    api_client.patch(
+        reverse("simulacao-detail", kwargs={"pk": simulacao.pk}), {"ativa": True}, format="json"
+    )
+    simulacao.refresh_from_db()
+    assert simulacao.ativa is False
+
+
+@pytest.mark.django_db
+def test_criar_simulacao_ignora_campo_ativa_enviada_pelo_cliente(api_client, usuario):
+
+    Patologia.objects.create(nome="sindrome do manguito rotador")
+
+    api_client.force_authenticate(user=usuario)
+    response = api_client.post(
+        reverse("simulacao-list"), {"titulo": "x", "nivel": "facil", "patologia": "sindrome do manguito rotador", "descricao": "descricao", "ativa": False}, format="json"
+    )
+    assert response.status_code == 201
+    assert response.data["ativa"] is True
+
+
+@pytest.mark.django_db
+def test_enviar_mensagem_tem_limite_de_requisicoes(api_client, usuario, simulacao, monkeypatch):
+    monkeypatch.setattr(
+        ScopedRateThrottle, "THROTTLE_RATES", {"ia_mensagem": "2/min", "ia_diagnostico": "5/min"}
+    )
+    api_client.force_authenticate(user=usuario)
+    url = url_acao("enviar-mensagem", simulacao.pk)
+
+    codigos = [api_client.post(url, {"mensagem": "oi"}).status_code for _ in range(3)]
+
+    assert codigos == [200, 200, 429]
+
+
+@pytest.mark.django_db
+def test_criar_sorteia_a_patologia_no_servidor_e_ignora_a_do_cliente(
+    api_client, usuario, patologia
+):
+    api_client.force_authenticate(user=usuario)
+    response = api_client.post(
+        reverse("simulacao-list"),
+        {"titulo": "x", "nivel": "facil", "patologia_simulada": "Inventada pelo cliente"},
+        format="json",
+    )
+    assert response.status_code == 201
+    assert "patologia_simulada" not in response.data
+    criada = SimulacaoConsulta.objects.get(pk=response.data["id"])
+    assert criada.patologia_simulada == "Tendinite do supraespinhal"
+    assert criada.fisioterapeuta == usuario
+
+
+@pytest.mark.django_db
+def test_criar_sem_patologias_cadastradas_retorna_503(api_client, usuario):
+    api_client.force_authenticate(user=usuario)
+    response = api_client.post(
+        reverse("simulacao-list"), {"titulo": "x", "nivel": "facil"}, format="json"
+    )
+    assert response.status_code == 503
+    assert response.data["code"] == "no_pathology_available"
+    assert SimulacaoConsulta.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_listagem_nao_expoe_a_patologia(api_client, usuario, simulacao):
+    api_client.force_authenticate(user=usuario)
+    response = api_client.get(reverse("simulacao-list"))
+    assert "patologia_simulada" not in str(response.data)
+    assert "Tendinite" not in str(response.data)
+
+
+@pytest.mark.django_db
+def test_endpoint_patologia_aleatoria_nao_existe_mais(api_client, usuario):
+    api_client.force_authenticate(user=usuario)
+    assert api_client.get("/api/consulta-ia/patologia-aleatoria/").status_code == 404

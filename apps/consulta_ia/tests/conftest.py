@@ -5,8 +5,10 @@ from unittest.mock import patch
 import pytest
 from rest_framework.test import APIClient
 
+from django.core.cache import cache
 from django.contrib.auth import get_user_model
 
+from apps.patologias.models import Patologia
 from apps.consulta_ia.ai.contracts import AIResponse
 from apps.consulta_ia.models import SimulacaoConsulta
 from apps.consulta_ia.ai.contracts import AIResponse, AIStructuredResponse
@@ -75,3 +77,15 @@ def simulacao(usuario):
         nivel="facil",
         patologia_simulada="Tendinite do supraespinhal",
     )
+
+
+@pytest.fixture
+def patologia(db):
+    return Patologia.objects.create(nome="Tendinite do supraespinhal", regiao="ombro", descricao="Dor forte e pontuda")
+
+
+@pytest.fixture(autouse=True)
+def limpar_cache():
+    cache.clear()
+    yield
+    cache.clear()
