@@ -22,7 +22,7 @@ from ..prompts import get_prompt
 
 logger = logging.getLogger(__name__)
 
-_STATUS_POR_CODIGO = {"simulation_closed": 400, "invalid_message": 400, "invalid_diagnosis": 400, "input_too_long":400, "consulta_ia_error": 500, "no_pathology_available": 503}
+_STATUS_POR_CODIGO = {"simulation_closed": 400, "invalid_message": 400, "invalid_diagnosis": 400, "input_too_long":400, "consulta_ia_error": 500, "no_pathology_available": 503, "interaction_in_progress": 409}
 
 
 def _resposta_de_erro(exc: ConsultaIAError) -> Response:

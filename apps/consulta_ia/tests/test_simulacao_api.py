@@ -5,7 +5,7 @@ from django.urls import reverse
 from rest_framework.throttling import ScopedRateThrottle
 
 from apps.patologias.models import Patologia
-from apps.consulta_ia.models import SimulacaoConsulta, MensagemSimulacao
+from apps.consulta_ia.models import SimulacaoConsulta, MensagemSimulacao, InteracaoIA
 from apps.consulta_ia.domain.exceptions import AIProviderError
 
 
@@ -334,3 +334,26 @@ def test_listagem_nao_expoe_a_patologia(api_client, usuario, simulacao):
 def test_endpoint_patologia_aleatoria_nao_existe_mais(api_client, usuario):
     api_client.force_authenticate(user=usuario)
     assert api_client.get("/api/consulta-ia/patologia-aleatoria/").status_code == 404
+
+
+@pytest.mark.django_db
+def test_requisicao_simultanea_retorna_409(api_client, usuario, simulacao, ia_falsa):
+    InteracaoIA.objects.create(simulacao=simulacao, tipo="mensagem")
+    api_client.force_authenticate(user=usuario)
+
+    response = api_client.post(url_acao("enviar-mensagem", simulacao.pk), {"mensagem": "oi"})
+
+    assert response.status_code == 409
+    assert response.data["code"] == "interaction_in_progress"
+    assert ia_falsa.requisicoes == []
+
+
+@pytest.mark.django_db
+def test_falha_da_ia_nao_deixa_mensagem_sem_resposta(api_client, usuario, simulacao, ia_falsa):
+    ia_falsa.erro = AIProviderError("boom")
+    api_client.force_authenticate(user=usuario)
+
+    response = api_client.post(url_acao("enviar-mensagem", simulacao.pk), {"mensagem": "oi"})
+
+    assert response.status_code == 500
+    assert simulacao.mensagens.count() == 0

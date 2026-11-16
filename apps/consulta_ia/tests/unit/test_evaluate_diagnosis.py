@@ -2,7 +2,7 @@ import pytest
 
 from apps.consulta_ia.application.use_cases.evaluate_diagnosis import EvaluateDiagnosis
 from apps.consulta_ia.domain.exceptions import AIProviderError, InvalidDiagnosisError, InputTooLongError, SimulationClosedError
-from apps.consulta_ia.models import MensagemSimulacao
+from apps.consulta_ia.models import MensagemSimulacao, InteracaoIA
 
 
 
@@ -54,3 +54,19 @@ def test_diagnostico_acima_do_limite_levanta_erro(simulacao, ia_falsa):
     with pytest.raises(InputTooLongError):
         EvaluateDiagnosis(ia_falsa, max_diagnosis_chars=10).execute(simulacao, "x" * 11)
     assert ia_falsa.requisicoes == []
+
+
+@pytest.mark.django_db
+def test_falha_marca_a_interacao_como_falhou(simulacao, ia_falsa):
+    ia_falsa.erro = AIProviderError("boom")
+    with pytest.raises(AIProviderError):
+        EvaluateDiagnosis(ia_falsa).execute(simulacao, "tendinite")
+    assert InteracaoIA.objects.get().estado == "falhou"
+
+
+@pytest.mark.django_db
+def test_sucesso_conclui_a_interacao_e_a_simulacao_juntas(simulacao, ia_falsa):
+    EvaluateDiagnosis(ia_falsa).execute(simulacao, "tendinite")
+    simulacao.refresh_from_db()
+    assert simulacao.ativa is False
+    assert InteracaoIA.objects.get().estado == "concluida"

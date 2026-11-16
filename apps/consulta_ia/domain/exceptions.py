@@ -56,3 +56,8 @@ class InputTooLongError(ConsultaIAError):
 class NoPathologyAvailableError(ConsultaIAError):
     code = "no_pathology_available"
     public_message = "Nenhuma patologia cadastrada no momento."
+
+
+class InteractionInProgressError(ConsultaIAError):
+    code = "interaction_in_progress"
+    public_message = "Já existe uma resposta em andamento nesta simulação. Aguarde e tente novamente."

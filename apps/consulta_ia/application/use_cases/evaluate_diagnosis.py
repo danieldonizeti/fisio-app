@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from django.utils import timezone
+from django.db import transaction
 
 from apps.consulta_ia.ai.contracts import AIMessage, AIRequest, StructuredAIProvider
 from apps.consulta_ia.ai.prompts.diagnosis_evaluator import (
@@ -10,7 +11,8 @@ from apps.consulta_ia.ai.prompts.diagnosis_evaluator import (
 from apps.consulta_ia.ai.schemas import DiagnosisEvaluation
 from apps.consulta_ia.application.dto import ROLE_POR_REMETENTE
 from apps.consulta_ia.domain.exceptions import InvalidDiagnosisError, InputTooLongError, SimulationClosedError
-from apps.consulta_ia.models import SimulacaoConsulta
+from apps.consulta_ia.models import SimulacaoConsulta, InteracaoIA
+from apps.consulta_ia.application.use_cases.send_patient_message import InteractionTracker
 
 _ROTULO_VEREDITO = {
     "correto": "Você acertou o diagnóstico.",
@@ -40,12 +42,14 @@ class EvaluateDiagnosis:
         provider: StructuredAIProvider,
         max_output_tokens: int = 1024,
         temperature: float = 0.3,
-        max_diagnosis_chars: int = 300
+        max_diagnosis_chars: int = 300,
+        tracker: InteractionTracker | None = None
     ):
         self._provider = provider
         self._max_output_tokens = max_output_tokens
         self._temperature = temperature
         self._max_diagnosis_chars = max_diagnosis_chars
+        self._tracker = tracker or InteractionTracker()
 
     def execute(self, simulacao: SimulacaoConsulta, diagnostico) -> DiagnosisResult:
         if not simulacao.ativa:
@@ -72,11 +76,22 @@ class EvaluateDiagnosis:
             temperature=self._temperature,
         )
 
-        resposta = self._provider.generate_structured(request, DiagnosisEvaluation)
-
-        simulacao.ativa = False
-        simulacao.finalizado_em = timezone.now()
-        simulacao.save(update_fields=["ativa", "finalizado_em"])
+        interacao = self._tracker.begin(simulacao, InteracaoIA.Tipo.DIAGNOSTICO)
+        try:
+            resposta = self._provider.generate_structured(request, DiagnosisEvaluation)
+            with transaction.atomic():
+                simulacao.ativa = False
+                simulacao.finalizado_em = timezone.now()
+                simulacao.save(update_fields=["ativa", "finalizado_em"])
+                self._tracker.complete(
+                    interacao,
+                    modelo=resposta.model,
+                    tokens_entrada=resposta.input_tokens,
+                    tokens_saida=resposta.output_tokens,
+                )
+        except Exception as exc:
+            self._tracker.fail(interacao, exc)
+            raise
 
         return DiagnosisResult(
             patologia_real=simulacao.patologia_simulada,

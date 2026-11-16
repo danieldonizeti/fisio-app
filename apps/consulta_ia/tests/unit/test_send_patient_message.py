@@ -7,11 +7,11 @@ from apps.consulta_ia.domain.exceptions import (
     InvalidMessageError,
     SimulationClosedError,
 )
-from apps.consulta_ia.models import MensagemSimulacao
+from apps.consulta_ia.models import MensagemSimulacao, InteracaoIA
 from apps.consulta_ia.ai.context.builder import ContextBuilder
 from apps.consulta_ia.ai.context.summarizer import ClinicalSummarizer, SUMMARIZER_INSTRUCTIONS
 from apps.consulta_ia.ai.contracts import AIResponse
-from apps.consulta_ia.domain.exceptions import AIProviderError, InputTooLongError
+from apps.consulta_ia.domain.exceptions import AIProviderError, InputTooLongError, InteractionInProgressError
 
 RESUMO_JSON = json.dumps({"facts": {"lado_afetado": {"value": "ombro direito"}}})
 
@@ -151,7 +151,11 @@ def test_falha_da_ia_nao_cria_mensagem_do_paciente(caso_de_uso, simulacao, ia_fa
     ia_falsa.erro = AIProviderError("boom")
     with pytest.raises(AIProviderError):
         caso_de_uso.execute(simulacao, "oi")
-    assert [m.remetente for m in simulacao.mensagens.all()] == ["fisio"]
+
+    assert MensagemSimulacao.objects.count() == 0
+    interacao = InteracaoIA.objects.get()
+    assert interacao.estado == "falhou"
+    assert interacao.erro_codigo == "ai_provider_error"
 
 
 @pytest.mark.django_db
@@ -187,3 +191,24 @@ def test_mensagem_acima_do_limite_nao_salva_nada(simulacao, ia_falsa):
         caso.execute(simulacao, "x" * 11)
     assert MensagemSimulacao.objects.count() == 0
     assert ia_falsa.requisicoes == []
+
+
+@pytest.mark.django_db
+def test_sucesso_marca_a_interacao_como_concluida(caso_de_uso, simulacao):
+    caso_de_uso.execute(simulacao, "Onde dói?")
+    interacao = InteracaoIA.objects.get()
+    assert interacao.estado == "concluida"
+    assert interacao.tipo == "mensagem"
+    assert interacao.modelo == "falso"
+    assert interacao.finalizada_em is not None
+
+
+@pytest.mark.django_db
+def test_nao_processa_enquanto_ha_interacao_em_andamento(caso_de_uso, simulacao, ia_falsa):
+    InteracaoIA.objects.create(simulacao=simulacao, tipo="mensagem")  # processando
+
+    with pytest.raises(InteractionInProgressError):
+        caso_de_uso.execute(simulacao, "oi")
+
+    assert ia_falsa.requisicoes == []
+    assert MensagemSimulacao.objects.count() == 0
