@@ -1,6 +1,8 @@
 import pytest
 import json
+import logging
 
+from apps.consulta_ia.observability import JsonFormatter
 from apps.consulta_ia.application.use_cases.send_patient_message import SendPatientMessage
 from apps.consulta_ia.domain.exceptions import (
     AIProviderError,
@@ -14,6 +16,8 @@ from apps.consulta_ia.ai.contracts import AIResponse
 from apps.consulta_ia.domain.exceptions import AIProviderError, InputTooLongError, InteractionInProgressError
 
 RESUMO_JSON = json.dumps({"facts": {"lado_afetado": {"value": "ombro direito"}}})
+
+SEGREDO_NA_MENSAGEM = "MARCADOR-SECRETO-123"
 
 
 class ProvedorRoteado:
@@ -212,3 +216,22 @@ def test_nao_processa_enquanto_ha_interacao_em_andamento(caso_de_uso, simulacao,
 
     assert ia_falsa.requisicoes == []
     assert MensagemSimulacao.objects.count() == 0
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("falhar", [False, True])
+def test_logs_nao_vazam_conteudo_nem_patologia(caso_de_uso, simulacao, ia_falsa, caplog, falhar):
+    if falhar:
+        ia_falsa.erro = AIProviderError("falha")
+
+    with caplog.at_level(logging.DEBUG, logger="apps.consulta_ia"):
+        try:
+            caso_de_uso.execute(simulacao, f"Doutor, {SEGREDO_NA_MENSAGEM}")
+        except AIProviderError:
+            pass
+
+    assert caplog.records  # os logs existem...
+    texto = " ".join(JsonFormatter().format(r) for r in caplog.records)
+    assert SEGREDO_NA_MENSAGEM not in texto  # ...mas sem o conteúdo
+    assert simulacao.patologia_simulada not in texto
+    assert ia_falsa.resposta not in texto

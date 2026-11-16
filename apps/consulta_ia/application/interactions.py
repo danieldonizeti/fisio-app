@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 
 from django.conf import settings
@@ -10,6 +11,11 @@ from apps.consulta_ia.domain.exceptions import (
     SimulationClosedError,
 )
 from apps.consulta_ia.models import InteracaoIA, SimulacaoConsulta
+
+logger = logging.getLogger(__name__)
+
+def _duracao_ms(interacao) -> int:
+    return int((timezone.now() - interacao.iniciada_em).total_seconds()* 1000)
 
 Estado = InteracaoIA.Estado
 
@@ -55,8 +61,34 @@ class InteractionTracker:
         if not atualizadas:
             raise InteractionInProgressError("Reserva expirou antes da conclusão.")
 
+        logger.info(
+            "ia_interacao_concluida",
+            extra={
+                "interacao_id": interacao.pk,
+                "simulacao_id": interacao.simulacao_id,
+                "tipo": interacao.tipo,
+                "modelo": modelo,
+                "tokens_entrada": tokens_entrada,
+                "tokens_saida": tokens_saida,
+                "duracao_ms": _duracao_ms(interacao),
+            },
+        )
+            
+
     def fail(self, interacao, exc: Exception) -> None:
         codigo = exc.code if isinstance(exc, ConsultaIAError) else "unexpected_error"
         InteracaoIA.objects.filter(pk=interacao.pk, estado=Estado.PROCESSANDO).update(
             estado=Estado.FALHOU, erro_codigo=codigo, finalizada_em=timezone.now()
+        )
+
+        logger.warning(
+            "ia_interacao_falhou",
+            extra={
+                "interacao_id": interacao.pk,
+                "simulacao_id": interacao.simulacao_id,
+                "tipo": interacao.tipo,
+                "erro_codigo": codigo,
+                "erro_tipo": type(exc).__name__,
+                "duracao_ms": _duracao_ms(interacao),
+            },
         )

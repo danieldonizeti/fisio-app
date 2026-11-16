@@ -154,7 +154,7 @@ CORS_ALLOW_ALL_ORIGINS = True # Em desenvolvimento
 
 
 # Gemini
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
+#GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "")
@@ -166,3 +166,11 @@ AI_CONTEXT_MAX_MESSAGES = int(os.environ.get("AI_CONTEXT_MAX_MESSAGES", "30"))
 AI_INTERACTION_LEASE_SECONDS = int(os.environ.get("AI_INTERACTION_LEASE_SECONDS", "180"))
 
 AUTH_USER_MODEL = 'users.User'
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {"json": {"()": "apps.consulta_ia.observability.JsonFormatter"}},
+    "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "json"}},
+    "loggers": {"apps.consulta_ia": {"handlers": ["console"], "level": "INFO"}},
+}
