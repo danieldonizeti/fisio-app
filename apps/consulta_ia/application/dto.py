@@ -1,0 +1,1 @@
+ROLE_POR_REMETENTE = {"fisio": "user", "paciente": "assistant"}

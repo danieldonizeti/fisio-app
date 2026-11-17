@@ -126,6 +126,9 @@ STATIC_URL = 'static/'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+AI_MAX_USER_MESSAGE_CHARS = int(os.environ.get("AI_MAX_USER_MESSAGE_CHARS", "1000"))
+AI_MAX_DIAGNOSIS_CHARS = int(os.environ.get("AI_MAX_DIAGNOSIS_CHARS", "300"))
+
 # REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -134,6 +137,10 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_THROTTLE_RATES': {
+        'ia_mensagem': '20/min',
+        'ia_diagnostico': '5/min'
+    },
 }
 
 # JWT
@@ -147,6 +154,23 @@ CORS_ALLOW_ALL_ORIGINS = True # Em desenvolvimento
 
 
 # Gemini
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
+#GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
+
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "")
+OPENAI_TIMEOUT_SECONDS = float(os.environ.get("OPENAI_TIMEOUT_SECONDS", "30"))
+
+AI_CONTEXT_MAX_INPUT_TOKENS = int(os.environ.get("AI_CONTEXT_MAX_INPUT_TOKENS", "3000"))
+AI_CONTEXT_MAX_MESSAGES = int(os.environ.get("AI_CONTEXT_MAX_MESSAGES", "30"))
+
+AI_INTERACTION_LEASE_SECONDS = int(os.environ.get("AI_INTERACTION_LEASE_SECONDS", "180"))
 
 AUTH_USER_MODEL = 'users.User'
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {"json": {"()": "apps.consulta_ia.observability.JsonFormatter"}},
+    "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "json"}},
+    "loggers": {"apps.consulta_ia": {"handlers": ["console"], "level": "INFO"}},
+}

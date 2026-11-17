@@ -1,0 +1,272 @@
+import pytest
+import json
+import logging
+
+from apps.consulta_ia.observability import JsonFormatter
+from apps.consulta_ia.application.use_cases.send_patient_message import SendPatientMessage
+from apps.consulta_ia.domain.exceptions import (
+    AIProviderError,
+    InvalidMessageError,
+    SimulationClosedError,
+)
+from apps.consulta_ia.models import MensagemSimulacao, InteracaoIA
+from apps.consulta_ia.ai.context.builder import ContextBuilder
+from apps.consulta_ia.ai.context.summarizer import ClinicalSummarizer, SUMMARIZER_INSTRUCTIONS
+from apps.consulta_ia.ai.contracts import AIResponse
+from apps.consulta_ia.domain.exceptions import AIProviderError, InputTooLongError, InteractionInProgressError
+
+RESUMO_JSON = json.dumps({"facts": {"lado_afetado": {"value": "ombro direito"}}})
+
+SEGREDO_NA_MENSAGEM = "MARCADOR-SECRETO-123"
+
+
+class ProvedorRoteado:
+    """RESPONSE JSON ao resumidor e texto comum ao paciente. """
+    def __init__(self, falhar_no_resumo=False, resumo_json=RESUMO_JSON):
+        self.requisicoes = []
+        self.falhar_no_resumo = falhar_no_resumo
+        self.resumo_json = resumo_json
+
+
+    def generate(self, request):
+        self.requisicoes.append(request)
+        if request.instructions == SUMMARIZER_INSTRUCTIONS:
+            if self.falhar_no_resumo:
+                raise AIProviderError("falha no resumo")
+            return AIResponse(content=self.resumo_json, model="falso", input_tokens=50, output_tokens=10)
+        return AIResponse(content="Resposta do paciente", model="falso")
+
+
+def criar_caso(provedor, max_messages=4):
+    return SendPatientMessage(
+        provider=provedor,
+        build_instructions=instrucoes,
+        context_builder=ContextBuilder(max_input_tokens=10_000, max_messages=max_messages),
+        summarizer=ClinicalSummarizer(provedor),
+    )
+
+
+def popular(simulacao, n):
+    for i in range(n):
+        MensagemSimulacao.objects.create(
+            simulacao=simulacao,
+            remetente="fisio" if i % 2 == 0 else "paciente",
+            conteudo=f"mensagem {i}",
+        )
+
+
+@pytest.mark.django_db
+def test_compacta_quando_a_janela_nao_comporta_o_historico(simulacao):
+    popular(simulacao, 10)
+    provedor = ProvedorRoteado()
+
+    criar_caso(provedor).execute(simulacao, "mensagem nova")
+
+    simulacao.refresh_from_db()
+    assert simulacao.resumo_clinico["facts"]["lado_afetado"]["value"] == "ombro direito"
+    assert simulacao.resumo_ate_mensagem_id is not None
+    assert len(provedor.requisicoes) == 2  # resumidor + paciente
+    assert "ombro direito" in provedor.requisicoes[-1].instructions
+
+
+@pytest.mark.django_db
+def test_nao_chama_o_resumidor_quando_tudo_cabe(simulacao):
+    popular(simulacao, 2)
+    provedor = ProvedorRoteado()
+
+    criar_caso(provedor).execute(simulacao, "mensagem nova")
+
+    simulacao.refresh_from_db()
+    assert len(provedor.requisicoes) == 1
+    assert simulacao.resumo_ate_mensagem_id is None
+
+
+@pytest.mark.django_db
+def test_falha_no_resumo_nao_derruba_a_resposta(simulacao):
+    popular(simulacao, 10)
+    provedor = ProvedorRoteado(falhar_no_resumo=True)
+
+    resposta = criar_caso(provedor).execute(simulacao, "mensagem nova")
+
+    simulacao.refresh_from_db()
+    assert resposta.conteudo == "Resposta do paciente"
+    assert simulacao.resumo_ate_mensagem_id is None
+
+
+@pytest.fixture
+def caso_de_uso(ia_falsa):
+    return SendPatientMessage(
+        provider=ia_falsa,
+        build_instructions=instrucoes,
+        context_builder=ContextBuilder(max_input_tokens=10_000, max_messages=50),
+    )
+
+
+def instrucoes(nivel, patologia):
+    return f"nivel={nivel};patologia={patologia}"
+
+
+@pytest.mark.django_db
+def test_salva_as_duas_mensagens_e_retorna_a_do_paciente(caso_de_uso, simulacao):
+    resposta = caso_de_uso.execute(simulacao, "  Onde dói?  ")
+    assert resposta.remetente == "paciente"
+    mensagens = list(simulacao.mensagens.all())
+    assert [(m.remetente, m.conteudo) for m in mensagens] == [
+        ("fisio", "Onde dói?"),
+        ("paciente", "Dói quando levanto o braço, doutor."),
+    ]
+
+
+@pytest.mark.django_db
+def test_monta_o_request_com_roles_e_instrucoes(caso_de_uso, simulacao, ia_falsa):
+    MensagemSimulacao.objects.create(simulacao=simulacao, remetente="fisio", conteudo="Oi")
+    MensagemSimulacao.objects.create(simulacao=simulacao, remetente="paciente", conteudo="Olá")
+
+    caso_de_uso.execute(simulacao, "Onde dói?")
+
+    req = ia_falsa.requisicoes[0]
+    assert [(m.role, m.content) for m in req.messages] == [
+        ("user", "Oi"),
+        ("assistant", "Olá"),
+        ("user", "Onde dói?"),
+    ]
+    assert req.instructions == "nivel=facil;patologia=Tendinite do supraespinhal"
+    assert req.max_output_tokens == 300
+
+
+@pytest.mark.django_db
+def test_simulacao_finalizada_levanta_erro_sem_salvar_nada(caso_de_uso, simulacao):
+    simulacao.ativa = False
+    simulacao.save()
+    with pytest.raises(SimulationClosedError):
+        caso_de_uso.execute(simulacao, "oi")
+    assert MensagemSimulacao.objects.count() == 0
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("valor", ["", "   ", None, 42])
+def test_mensagem_invalida_levanta_erro(caso_de_uso, simulacao, valor):
+    with pytest.raises(InvalidMessageError):
+        caso_de_uso.execute(simulacao, valor)
+    assert MensagemSimulacao.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_falha_da_ia_nao_cria_mensagem_do_paciente(caso_de_uso, simulacao, ia_falsa):
+    ia_falsa.erro = AIProviderError("boom")
+    with pytest.raises(AIProviderError):
+        caso_de_uso.execute(simulacao, "oi")
+
+    assert MensagemSimulacao.objects.count() == 0
+    interacao = InteracaoIA.objects.get()
+    assert interacao.estado == "falhou"
+    assert interacao.erro_codigo == "ai_provider_error"
+
+
+@pytest.mark.django_db
+def test_envia_apenas_a_janela_recente_mas_o_banco_guarda_tudo(simulacao, ia_falsa):
+    for i in range(6):
+        MensagemSimulacao.objects.create(
+            simulacao=simulacao,
+            remetente="fisio" if i % 2 == 0 else "paciente",
+            conteudo=f"mensagem {i}",
+        )
+    caso = SendPatientMessage(
+        provider=ia_falsa,
+        build_instructions=instrucoes,
+        context_builder=ContextBuilder(max_input_tokens=10_000, max_messages=3),
+    )
+
+    caso.execute(simulacao, "mensagem nova")
+
+    enviadas = [m.content for m in ia_falsa.requisicoes[0].messages]
+    assert enviadas == ["mensagem 4", "mensagem 5", "mensagem nova"]
+    assert simulacao.mensagens.count() == 8
+
+
+@pytest.mark.django_db
+def test_mensagem_acima_do_limite_nao_salva_nada(simulacao, ia_falsa):
+    caso = SendPatientMessage(
+        provider=ia_falsa,
+        build_instructions=instrucoes,
+        context_builder=ContextBuilder(max_input_tokens=10_000, max_messages=50),
+        max_message_chars=10,
+    )
+    with pytest.raises(InputTooLongError):
+        caso.execute(simulacao, "x" * 11)
+    assert MensagemSimulacao.objects.count() == 0
+    assert ia_falsa.requisicoes == []
+
+
+@pytest.mark.django_db
+def test_sucesso_marca_a_interacao_como_concluida(caso_de_uso, simulacao):
+    caso_de_uso.execute(simulacao, "Onde dói?")
+    interacao = InteracaoIA.objects.get()
+    assert interacao.estado == "concluida"
+    assert interacao.tipo == "mensagem"
+    assert interacao.modelo == "falso"
+    assert interacao.finalizada_em is not None
+
+
+@pytest.mark.django_db
+def test_nao_processa_enquanto_ha_interacao_em_andamento(caso_de_uso, simulacao, ia_falsa):
+    InteracaoIA.objects.create(simulacao=simulacao, tipo="mensagem")  # processando
+
+    with pytest.raises(InteractionInProgressError):
+        caso_de_uso.execute(simulacao, "oi")
+
+    assert ia_falsa.requisicoes == []
+    assert MensagemSimulacao.objects.count() == 0
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("falhar", [False, True])
+def test_logs_nao_vazam_conteudo_nem_patologia(caso_de_uso, simulacao, ia_falsa, caplog, falhar):
+    if falhar:
+        ia_falsa.erro = AIProviderError("falha")
+
+    with caplog.at_level(logging.DEBUG, logger="apps.consulta_ia"):
+        try:
+            caso_de_uso.execute(simulacao, f"Doutor, {SEGREDO_NA_MENSAGEM}")
+        except AIProviderError:
+            pass
+
+    assert caplog.records  # os logs existem...
+    texto = " ".join(JsonFormatter().format(r) for r in caplog.records)
+    assert SEGREDO_NA_MENSAGEM not in texto  # ...mas sem o conteúdo
+    assert simulacao.patologia_simulada not in texto
+    assert ia_falsa.resposta not in texto
+
+
+@pytest.mark.django_db
+def test_compactacao_registra_o_resumo_com_tokens(simulacao):
+    popular(simulacao, 10)
+    criar_caso(ProvedorRoteado()).execute(simulacao, "mensagem nova")
+
+    registro = InteracaoIA.objects.get(tipo="resumo")
+    assert registro.estado == "concluida"
+    assert registro.modelo == "falso"
+    assert (registro.tokens_entrada, registro.tokens_saida) == (50, 10)
+
+
+@pytest.mark.django_db
+def test_falha_no_resumo_fica_registrada(simulacao):
+    popular(simulacao, 10)
+    criar_caso(ProvedorRoteado(falhar_no_resumo=True)).execute(simulacao, "mensagem nova")
+
+    registro = InteracaoIA.objects.get(tipo="resumo")
+    assert registro.estado == "falhou"
+    assert registro.erro_codigo == "ai_provider_error"
+
+
+@pytest.mark.django_db
+def test_logs_do_resumo_nao_vazam_conteudo(simulacao, caplog):
+    invalido = '{"facts": {"ok": {"value": "SEGREDO-NO-RESUMO", "campo_extra": 1}}}'
+    popular(simulacao, 10)
+
+    with caplog.at_level(logging.DEBUG, logger="apps.consulta_ia"):
+        criar_caso(ProvedorRoteado(resumo_json=invalido)).execute(simulacao, "mensagem nova")
+
+    texto = " ".join(JsonFormatter().format(r) for r in caplog.records)
+    assert "ia_resumo_falhou" in texto
+    assert "SEGREDO-NO-RESUMO" not in texto
