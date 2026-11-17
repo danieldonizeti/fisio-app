@@ -12,6 +12,15 @@ class ClinicalFact(BaseModel):
     source: Literal["patient_statement"] = "patient_statement"
     confidence: Literal["explicit", "implied"] = "explicit"
 
+    @field_validator("value", mode="before")
+    @classmethod
+    def encurtar(cls, valor):
+        if isinstance(valor, str):
+            valor = valor.strip()
+            if len(valor) > 200:
+                valor = valor[:199].rstrip() + "…"
+        return valor
+
 
 class ClinicalSummary(BaseModel):
     model_config = ConfigDict(extra="forbid")

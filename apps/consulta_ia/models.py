@@ -65,6 +65,7 @@ class InteracaoIA(models.Model):
     class Tipo(models.TextChoices):
         MENSAGEM = "mensagem"
         DIAGNOSTICO = "diagnostico"
+        RESUMO = "resumo"
 
     class Estado(models.TextChoices):
         PROCESSANDO = "processando"

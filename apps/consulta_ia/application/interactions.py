@@ -92,3 +92,31 @@ class InteractionTracker:
                 "duracao_ms": _duracao_ms(interacao),
             },
         )
+
+
+    def record(
+        self, simulacao, tipo, *, iniciada_em, estado,
+        modelo="", tokens_entrada=None, tokens_saida=None, erro_codigo="", detalhe="",
+    ):
+        agora = timezone.now()
+        interacao = InteracaoIA.objects.create(
+            simulacao=simulacao, tipo=tipo, estado=estado, modelo=modelo,
+            tokens_entrada=tokens_entrada, tokens_saida=tokens_saida,
+            erro_codigo=erro_codigo, iniciada_em=iniciada_em, finalizada_em=agora,
+        )
+        extra = {
+            "interacao_id": interacao.pk,
+            "simulacao_id": simulacao.pk,
+            "tipo": tipo,
+            "modelo": modelo,
+            "tokens_entrada": tokens_entrada,
+            "tokens_saida": tokens_saida,
+            "duracao_ms": int((agora - iniciada_em).total_seconds() * 1000),
+        }
+        if estado == Estado.FALHOU:
+            logger.warning(
+                f"ia_{tipo}_falhou",
+                extra={**extra, "erro_codigo": erro_codigo, "erro_detalhe": detalhe},
+            )
+        else:
+            logger.info(f"ia_{tipo}_concluida", extra=extra)

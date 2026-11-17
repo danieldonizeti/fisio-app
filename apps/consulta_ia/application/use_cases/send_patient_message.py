@@ -1,7 +1,9 @@
 import logging
+
 from collections.abc import Callable
 
 from django.db import transaction
+from django.utils import timezone
 
 from apps.consulta_ia.ai.context.builder import ContextBuilder
 from apps.consulta_ia.ai.context.summarizer import ClinicalSummarizer, render_summary
@@ -14,6 +16,7 @@ from apps.consulta_ia.domain.exceptions import (
     InputTooLongError,
     InvalidMessageError,
     SimulationClosedError,
+    ContextSummaryError,
 )
 from apps.consulta_ia.models import InteracaoIA, MensagemSimulacao, SimulacaoConsulta
 
@@ -117,12 +120,29 @@ class SendPatientMessage:
 
     def _compactar(self, simulacao, instrucoes_base, resumo, pendentes, historico, contexto):
         manter = max(1, len(contexto.messages) // 2)
+        inicio = timezone.now()
         try:
-            novo = self._summarizer.update(resumo, historico[:-manter])
+            resultado = self._summarizer.update(resumo, historico[:-manter])
         except ConsultaIAError as exc:
-            logger.warning("Resumo clínico falhou (simulacao=%s): %s", simulacao.pk, exc)
-            return resumo, contexto
+            self._tracker.record(
+                simulacao, InteracaoIA.Tipo.RESUMO,
+                iniciada_em=inicio, estado=InteracaoIA.Estado.FALHOU,
+                erro_codigo=exc.code,
+                tokens_entrada=getattr(exc, "input_tokens", None),
+                tokens_saida=getattr(exc, "output_tokens", None),
+                detalhe=str(exc) if isinstance(exc, ContextSummaryError) else "",
+            )
+            return resumo, contexto  
+        
+        self._tracker.record(
+            simulacao, InteracaoIA.Tipo.RESUMO,
+            iniciada_em=inicio, estado=InteracaoIA.Estado.CONCLUIDA,
+            modelo=resultado.model,
+            tokens_entrada=resultado.input_tokens,
+            tokens_saida=resultado.output_tokens,
+        )
 
+        novo = resultado.summary
         simulacao.resumo_clinico = novo.model_dump(mode="json")
         simulacao.resumo_ate_mensagem_id = pendentes[len(historico) - manter - 1].id
         simulacao.save(update_fields=["resumo_clinico", "resumo_ate_mensagem_id"])

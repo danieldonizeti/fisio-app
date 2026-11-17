@@ -36,6 +36,8 @@ class InvalidMessageError(ConsultaIAError):
 class ContextSummaryError(ConsultaIAError):
     code = "context_summary_error"
     public_message = "Não foi possivel atualizar o resumo da consulta"
+    input_tokens: int | None = None
+    output_tokens: int | None = None
 
 
 class InvalidDiagnosisError(ConsultaIAError):

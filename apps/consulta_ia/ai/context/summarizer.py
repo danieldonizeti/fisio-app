@@ -1,5 +1,6 @@
 import re
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from pydantic import ValidationError
 
@@ -15,7 +16,8 @@ Se um fato novo contradiz um anterior, mantenha o mais recente.
 Responda APENAS com JSON válido, sem texto extra e sem markdown, neste formato:
 {"facts": {"chave_em_snake_case": {"value": "texto curto", "source": "patient_statement", "confidence": "explicit"}}}
 Use "explicit" para o que o paciente disse claramente e "implied" para o que foi apenas sugerido
-Una fatos redundantes em uma única chave (por exemplo, não crie uma chave para "piora ao levantar o braço" e outra para "dor ao movimentar o braço"). Prefira poucos fatos completos. Mire em no máximo 15 fatos, cada valor com no máximo 200 caracteres.."""
+Una fatos redundantes em uma única chave (por exemplo, não crie uma chave para "piora ao levantar o braço" e outra para "dor ao movimentar o braço"). Prefira poucos fatos completos. Mire em no máximo 15 fatos, cada valor com no máximo 200 caracteres
+Mire em no máximo 15 fatos. Cada valor DEVE ter no máximo 200 caracteres; se ficar mais longo, resuma..."""
 
 _CERCA = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE)
 
@@ -59,7 +61,27 @@ class ClinicalSummarizer:
                 temperature=0.0,
             )
         )
-        return _parse(resposta.content)
+        try:
+            resumo = _parse(resposta.content)
+        except ContextSummaryError as exc:
+            exc.input_tokens = resposta.input_tokens
+            exc.output_tokens = resposta.output_tokens
+            raise
+        return SummaryResult(
+            summary=resumo,
+            model=resposta.model,
+            input_tokens=resposta.input_tokens,
+            output_tokens=resposta.output_tokens,
+        )
+
+
+
+@dataclass(frozen=True)
+class SummaryResult:
+    summary: ClinicalSummary
+    model: str
+    input_tokens: int | None = None
+    output_tokens: int | None = None
 
 
 def _parse(texto: str) -> ClinicalSummary:
@@ -67,4 +89,9 @@ def _parse(texto: str) -> ClinicalSummary:
     try:
         return ClinicalSummary.model_validate_json(limpo)
     except ValidationError as exc:
-        raise ContextSummaryError(f"Resumo inválido: {exc}") from exc
+        
+        problemas = "; ".join(
+            f"{'.'.join(str(p) for p in e['loc']) or 'raiz'}: {e['type']}"
+            for e in exc.errors(include_input=False, include_url=False)
+        )
+        raise ContextSummaryError(f"Resumo inválido: {problemas}") from exc

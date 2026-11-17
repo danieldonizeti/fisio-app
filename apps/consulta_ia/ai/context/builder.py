@@ -34,7 +34,6 @@ class ContextBuilder:
         used = 0
         for message in reversed(history):
             cost = estimate_message_tokens(message)
-            # A mais recente sempre entra; as demais respeitam os limites.
             if selected and (
                 len(selected) >= self._max_messages or used + cost > budget
             ):
