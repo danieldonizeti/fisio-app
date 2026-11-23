@@ -20,7 +20,7 @@ Plataforma de estudos e gestão clínica para fisioterapeutas, desenvolvida com 
 - Busca e filtros por região/categoria em todos os módulos
 - Imagens armazenadas via **Cloudinary CDN**
 
-### 👥 Gestão de Pacientes
+### Gestão de Pacientes
 - Cadastro completo com dados pessoais e contato
 - **Ficha de anamnese** clínica queixa principal, história da doença, avaliação da dor (escala 0-10), antecedentes, hábitos, dados clínicos (IMC calculado automaticamente)
 - **Histórico de sessões** registro de procedimentos, evolução e intensidade de dor por sessão
@@ -63,7 +63,7 @@ Destaques:
 - **Segurança:** a patologia nunca é exposta pela API; entradas do usuário são tratadas como dados (proteção contra *prompt injection*); limites de tamanho e de requisições por minuto; erros internos nunca vazam para o cliente.
 - **Observabilidade:** logs estruturados em JSON (sem conteúdo das conversas), registro de cada chamada (duração, tokens, erro) e um comando de métricas.
 
-Detalhes, diagramas e decisões de design em [`docs/arquitetura-ia.md`](docs/arquitetura-ia.md).
+Detalhes, diagramas e decisões de design em [`docs/arquitetura-ia.md`](docs/arquitetura_ia.md).
 
 ---
 
