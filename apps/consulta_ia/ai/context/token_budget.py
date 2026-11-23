@@ -2,8 +2,8 @@ import math
 
 from apps.consulta_ia.ai.contracts import AIMessage
 
-_CHARS_PER_TOKEN = 3        # conservador para português
-_OVERHEAD_PER_MESSAGE = 4   # papel, delimitadores etc.
+_CHARS_PER_TOKEN = 3
+_OVERHEAD_PER_MESSAGE = 4
 
 
 def estimate_tokens(text: str) -> int:

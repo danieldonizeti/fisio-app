@@ -22,9 +22,10 @@ SEGREDO_NA_MENSAGEM = "MARCADOR-SECRETO-123"
 
 class ProvedorRoteado:
     """RESPONSE JSON ao resumidor e texto comum ao paciente. """
-    def __init__(self, falhar_no_resumo=False):
+    def __init__(self, falhar_no_resumo=False, resumo_json=RESUMO_JSON):
         self.requisicoes = []
         self.falhar_no_resumo = falhar_no_resumo
+        self.resumo_json = resumo_json
 
 
     def generate(self, request):
@@ -32,7 +33,7 @@ class ProvedorRoteado:
         if request.instructions == SUMMARIZER_INSTRUCTIONS:
             if self.falhar_no_resumo:
                 raise AIProviderError("falha no resumo")
-            return AIResponse(content=RESUMO_JSON, model="falso")
+            return AIResponse(content=self.resumo_json, model="falso", input_tokens=50, output_tokens=10)
         return AIResponse(content="Resposta do paciente", model="falso")
 
 
@@ -235,3 +236,37 @@ def test_logs_nao_vazam_conteudo_nem_patologia(caso_de_uso, simulacao, ia_falsa,
     assert SEGREDO_NA_MENSAGEM not in texto  # ...mas sem o conteúdo
     assert simulacao.patologia_simulada not in texto
     assert ia_falsa.resposta not in texto
+
+
+@pytest.mark.django_db
+def test_compactacao_registra_o_resumo_com_tokens(simulacao):
+    popular(simulacao, 10)
+    criar_caso(ProvedorRoteado()).execute(simulacao, "mensagem nova")
+
+    registro = InteracaoIA.objects.get(tipo="resumo")
+    assert registro.estado == "concluida"
+    assert registro.modelo == "falso"
+    assert (registro.tokens_entrada, registro.tokens_saida) == (50, 10)
+
+
+@pytest.mark.django_db
+def test_falha_no_resumo_fica_registrada(simulacao):
+    popular(simulacao, 10)
+    criar_caso(ProvedorRoteado(falhar_no_resumo=True)).execute(simulacao, "mensagem nova")
+
+    registro = InteracaoIA.objects.get(tipo="resumo")
+    assert registro.estado == "falhou"
+    assert registro.erro_codigo == "ai_provider_error"
+
+
+@pytest.mark.django_db
+def test_logs_do_resumo_nao_vazam_conteudo(simulacao, caplog):
+    invalido = '{"facts": {"ok": {"value": "SEGREDO-NO-RESUMO", "campo_extra": 1}}}'
+    popular(simulacao, 10)
+
+    with caplog.at_level(logging.DEBUG, logger="apps.consulta_ia"):
+        criar_caso(ProvedorRoteado(resumo_json=invalido)).execute(simulacao, "mensagem nova")
+
+    texto = " ".join(JsonFormatter().format(r) for r in caplog.records)
+    assert "ia_resumo_falhou" in texto
+    assert "SEGREDO-NO-RESUMO" not in texto

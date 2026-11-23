@@ -8,6 +8,7 @@ from apps.consulta_ia.ai.contracts import AIMessage
 from apps.consulta_ia.ai.schemas import ClinicalSummary
 from apps.consulta_ia.domain.exceptions import ContextSummaryError
 
+
 JSON_OK = json.dumps({"facts": {"lado_afetado": {"value": "ombro direito"}}})
 
 
@@ -15,7 +16,7 @@ def test_atualiza_o_resumo_a_partir_de_json_valido(ia_falsa):
     ia_falsa.resposta = JSON_OK
     resumo = ClinicalSummarizer(ia_falsa).update(
         ClinicalSummary(), [AIMessage("assistant", "Dói no ombro direito.")]
-    )
+    ).summary
     assert resumo.facts["lado_afetado"].value == "ombro direito"
 
 
@@ -23,7 +24,7 @@ def test_aceita_json_dentro_de_cerca_markdown(ia_falsa):
     ia_falsa.resposta = f"```json\n{JSON_OK}\n```"
     resumo = ClinicalSummarizer(ia_falsa).update(
         ClinicalSummary(), [AIMessage("user", "oi")]
-    )
+    ).summary
     assert "lado_afetado" in resumo.facts
 
 
@@ -53,3 +54,16 @@ def test_render_summary_vazio_e_preenchido():
     assert render_summary(ClinicalSummary()) == ""
     resumo = ClinicalSummary.model_validate_json(JSON_OK)
     assert "- lado_afetado: ombro direito" in render_summary(resumo)
+
+
+def test_valor_longo_e_encurtado_em_vez_de_rejeitado():
+    resumo = ClinicalSummary.model_validate({"facts": {"tratamentos": {"value": "x" * 500}}})
+    assert len(resumo.facts["tratamentos"].value) == 200
+
+
+def test_mensagem_de_erro_nao_carrega_conteudo(ia_falsa):
+    ia_falsa.resposta = '{"facts": {"ok": {"value": "SEGREDO-CLINICO", "campo_extra": 1}}}'
+    with pytest.raises(ContextSummaryError) as erro:
+        ClinicalSummarizer(ia_falsa).update(ClinicalSummary(), [AIMessage("user", "oi")])
+    assert "SEGREDO-CLINICO" not in str(erro.value)
+    assert "extra_forbidden" in str(erro.value)
